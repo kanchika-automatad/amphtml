@@ -1,44 +1,27 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {PriorityQueue} from '#core/data-structures/priority-queue';
+import {isIframed} from '#core/dom';
+import {escapeCssSelectorIdent} from '#core/dom/css-selectors';
+import {closestAncestorElementBySelector} from '#core/dom/query';
+import {getWin} from '#core/window';
 
-import {Services} from '../services';
-import {
-  closestAncestorElementBySelector,
-  isIframed,
-  openWindowDialog,
-  tryFocus,
-} from '../dom';
-import {dev, user, userAssert} from '../log';
-import {dict} from '../utils/object';
-import {escapeCssSelectorIdent} from '../css';
+import {Services} from '#service';
+
+import {dev, user, userAssert} from '#utils/log';
+
 import {getExtraParamsUrl, shouldAppendExtraParams} from '../impression';
 import {getMode} from '../mode';
-import {
-  installServiceInEmbedScope,
-  registerServiceBuilderForDoc,
-} from '../service';
-import {isExperimentOn} from '../experiments';
-import {toWin} from '../types';
-import PriorityQueue from '../utils/priority-queue';
+import {openWindowDialog} from '../open-window-dialog';
+import {registerServiceBuilderForDoc} from '../service-helpers';
+import {isLocalhostOrigin} from '../url';
 
 const TAG = 'navigation';
+
 /** @private @const {string} */
 const EVENT_TYPE_CLICK = 'click';
+
 /** @private @const {string} */
 const EVENT_TYPE_CONTEXT_MENU = 'contextmenu';
+
 const VALID_TARGETS = ['_top', '_blank'];
 
 /** @private @const {string} */
@@ -54,7 +37,7 @@ const AMP_CUSTOM_LINKER_TARGET = '__AMP_CUSTOM_LINKER_TARGET__';
  * @enum {number} Priority reserved for extensions in anchor mutations.
  * The higher the priority, the sooner it's invoked.
  */
-export const Priority = {
+export const Priority_Enum = {
   LINK_REWRITER_MANAGER: 0,
   ANALYTICS_LINKER: 2,
 };
@@ -88,22 +71,18 @@ export function maybeExpandUrlParamsForTesting(ampdoc, e) {
 /**
  * Intercept any click on the current document and prevent any
  * linking to an identifier from pushing into the history stack.
- * @implements {../service.EmbeddableService}
  * @visibleForTesting
  */
 export class Navigation {
   /**
    * @param {!./ampdoc-impl.AmpDoc} ampdoc
-   * @param {(!Document|!ShadowRoot)=} opt_rootNode
    */
-  constructor(ampdoc, opt_rootNode) {
-    // TODO(#22733): remove subroooting once ampdoc-fie is launched.
-
+  constructor(ampdoc) {
     /** @const {!./ampdoc-impl.AmpDoc} */
     this.ampdoc = ampdoc;
 
     /** @private @const {!Document|!ShadowRoot} */
-    this.rootNode_ = opt_rootNode || ampdoc.getRootNode();
+    this.rootNode_ = ampdoc.getRootNode();
 
     /** @private @const {!./viewport/viewport-interface.ViewportInterface} */
     this.viewport_ = Services.viewportForDoc(this.ampdoc);
@@ -135,11 +114,11 @@ export class Navigation {
      * Must use URL parsing scoped to `rootNode_` for correct FIE behavior.
      * @private @const {!Element|!ShadowRoot}
      */
-    this.serviceContext_ =
-      /** @type {!Element|!ShadowRoot} */ (this.rootNode_.nodeType ==
-      Node.DOCUMENT_NODE
+    this.serviceContext_ = /** @type {!Element|!ShadowRoot} */ (
+      this.rootNode_.nodeType == Node.DOCUMENT_NODE
         ? this.rootNode_.documentElement
-        : this.rootNode_);
+        : this.rootNode_
+    );
 
     /** @private @const {!function(!Event)|undefined} */
     this.boundHandle_ = this.handle_.bind(this);
@@ -147,8 +126,20 @@ export class Navigation {
     this.rootNode_.addEventListener(EVENT_TYPE_CONTEXT_MENU, this.boundHandle_);
     /** @private {boolean} */
     this.appendExtraParams_ = false;
-    shouldAppendExtraParams(this.ampdoc).then(res => {
+    shouldAppendExtraParams(this.ampdoc).then((res) => {
       this.appendExtraParams_ = res;
+    });
+
+    /** @private {boolean} */
+    this.isTrustedViewer_ = false;
+    /** @private {boolean} */
+    this.isLocalViewer_ = false;
+    Promise.all([
+      this.viewer_.isTrustedViewer(),
+      this.viewer_.getViewerOrigin(),
+    ]).then((values) => {
+      this.isTrustedViewer_ = values[0];
+      this.isLocalViewer_ = isLocalhostOrigin(values[1]);
     });
 
     /**
@@ -183,19 +174,6 @@ export class Navigation {
       'click',
       maybeExpandUrlParams.bind(null, ampdoc),
       /* capture */ true
-    );
-  }
-
-  /**
-   * @param {!Window} embedWin
-   * @param {!./ampdoc-impl.AmpDoc} ampdoc
-   * @nocollapse
-   */
-  static installInEmbedWindow(embedWin, ampdoc) {
-    installServiceInEmbedScope(
-      embedWin,
-      TAG,
-      new Navigation(ampdoc, embedWin.document)
     );
   }
 
@@ -251,14 +229,10 @@ export class Navigation {
    * @param {!{
    *   target: (string|undefined),
    *   opener: (boolean|undefined),
-   * }=} opt_options
+   * }=} options
    */
-  navigateTo(
-    win,
-    url,
-    opt_requestedBy,
-    {target = '_top', opener = false} = {}
-  ) {
+  navigateTo(win, url, opt_requestedBy, options = {}) {
+    const {opener = false, target = '_top'} = options;
     url = this.applyNavigateToMutators_(url);
     const urlService = Services.urlForDoc(this.serviceContext_);
     if (!urlService.isProtocolValid(url)) {
@@ -271,8 +245,9 @@ export class Navigation {
       `Target '${target}' not supported.`
     );
 
-    // Resolve navigateTos relative to the source URL, not the proxy URL.
-    url = urlService.getSourceUrl(url);
+    // If we're on cache, resolve relative URLs to the publisher (non-cache) origin.
+    const sourceUrl = urlService.getSourceUrl(win.location);
+    url = urlService.resolveRelativeUrl(url, sourceUrl);
 
     // If we have a target of "_blank", we will want to open a new window. A
     // target of "_top" should behave like it would on an anchor tag and
@@ -311,13 +286,10 @@ export class Navigation {
    */
   navigateToAmpUrl(url, requestedBy) {
     if (this.viewer_.hasCapability('a2a')) {
-      this.viewer_.sendMessage(
-        'a2aNavigate',
-        dict({
-          'url': url,
-          'requestedBy': requestedBy,
-        })
-      );
+      this.viewer_.sendMessage('a2aNavigate', {
+        'url': url,
+        'requestedBy': requestedBy,
+      });
       return true;
     }
     return false;
@@ -335,7 +307,7 @@ export class Navigation {
       return meta
         .getAttribute('content')
         .split(',')
-        .map(s => s.trim());
+        .map((s) => s.trim());
     }
     return [];
   }
@@ -361,7 +333,6 @@ export class Navigation {
     if (!target || !target.href) {
       return;
     }
-
     if (e.type == EVENT_TYPE_CLICK) {
       this.handleClick_(target, e);
     } else if (e.type == EVENT_TYPE_CONTEXT_MENU) {
@@ -410,7 +381,7 @@ export class Navigation {
    * @private
    */
   handleContextMenuClick_(element, e) {
-    // TODO(wg-runtime): Handle A2A and custom link protocols.
+    // TODO(wg-performance): Handle A2A, custom link protocols, and ITP 2.3 mitigation.
     this.expandVarsForAnchor_(element);
     this.applyAnchorMutators_(element, e);
   }
@@ -421,7 +392,7 @@ export class Navigation {
    * @param {!Event} e
    */
   applyAnchorMutators_(element, e) {
-    this.anchorMutators_.forEach(anchorMutator => {
+    this.anchorMutators_.forEach((anchorMutator) => {
       anchorMutator(element, e);
     });
   }
@@ -432,7 +403,7 @@ export class Navigation {
    * @return {string}
    */
   applyNavigateToMutators_(url) {
-    this.navigateToMutators_.forEach(mutator => {
+    this.navigateToMutators_.forEach((mutator) => {
       url = mutator(url);
     });
     return url;
@@ -470,7 +441,7 @@ export class Navigation {
     }
 
     /** @const {!Window} */
-    const win = toWin(element.ownerDocument.defaultView);
+    const win = getWin(element);
     const url = element.href;
     const {protocol} = location;
 
@@ -514,7 +485,7 @@ export class Navigation {
     const relations = element
       .getAttribute('rel')
       .split(' ')
-      .map(s => s.trim());
+      .map((s) => s.trim());
     if (!relations.includes('amphtml')) {
       return false;
     }
@@ -553,61 +524,66 @@ export class Navigation {
         }
       }
 
-      // Safari 13: Temporarily remove viewer query params from iframe
-      // (e.g. amp_js_v, usqp) to prevent document.referrer from being reduced
-      // to eTLD+1 (e.g. ampproject.org).
+      // ITP 2.3 mitigation. See https://github.com/ampproject/amphtml/issues/25179.
       const {win} = this.ampdoc;
       const platform = Services.platformFor(win);
       const viewer = Services.viewerForDoc(element);
       if (
-        isExperimentOn(
-          this.ampdoc.win,
-          'remove-viewer-query-params-on-navigate'
-        ) &&
         fromLocation.search &&
         platform.isSafari() &&
         platform.getMajorVersion() >= 13 &&
         viewer.isProxyOrigin() &&
         viewer.isEmbedded()
       ) {
-        dev().info(
-          TAG,
-          'Removing iframe query string before navigation:',
-          fromLocation.search
-        );
-        const original = fromLocation.href;
-        const noQuery = `${fromLocation.origin}${fromLocation.pathname}${fromLocation.hash}`;
-        win.history.replaceState(null, '', noQuery);
-
-        const restoreQuery = () => {
-          const currentHref = win.location.href;
-          if (currentHref == noQuery) {
-            dev().info(TAG, 'Restored iframe URL with query string:', original);
-            win.history.replaceState(null, '', original);
-          } else {
-            dev().error(
-              TAG,
-              'Unexpected iframe URL change:',
-              currentHref,
-              noQuery
-            );
-          }
-        };
-
-        // For blank_, restore query params after the new page opens.
-        if (target === '_blank') {
-          win.setTimeout(restoreQuery, 0);
-        } else {
-          // For _top etc., wait until page is restored from page cache (bfcache).
-          // https://webkit.org/blog/516/webkit-page-cache-ii-the-unload-event/
-          win.addEventListener('pageshow', function onPageShow(e) {
-            if (e.persisted) {
-              restoreQuery();
-              win.removeEventListener('pageshow', onPageShow);
-            }
-          });
-        }
+        this.removeViewerQueryBeforeNavigation_(win, fromLocation, target);
       }
+
+      if (this.viewerInterceptsNavigation(to, 'intercept_click')) {
+        e.preventDefault();
+      }
+    }
+  }
+
+  /**
+   * Temporarily remove viewer query params from iframe (e.g. amp_js_v, usqp)
+   * to prevent document.referrer from being reduced to eTLD+1 (e.g. ampproject.org).
+   * @param {!Window} win
+   * @param {!Location} fromLocation
+   * @param {string} target
+   * @private
+   */
+  removeViewerQueryBeforeNavigation_(win, fromLocation, target) {
+    dev().info(
+      TAG,
+      'Removing iframe query string before navigation:',
+      fromLocation.search
+    );
+    const original = fromLocation.href;
+    const noQuery = `${fromLocation.origin}${fromLocation.pathname}${fromLocation.hash}`;
+    win.history.replaceState(null, '', noQuery);
+
+    const restoreQuery = () => {
+      const currentHref = win.location.href;
+      if (currentHref == noQuery) {
+        dev().info(TAG, 'Restored iframe URL with query string:', original);
+        win.history.replaceState(null, '', original);
+      } else {
+        dev().error(TAG, 'Unexpected iframe URL change:', currentHref, noQuery);
+      }
+    };
+
+    // For blank_, restore query params after the new page opens.
+    if (target === '_blank') {
+      win.setTimeout(restoreQuery, 0);
+    } else {
+      // For _top etc., wait until page is restored from page cache (bfcache).
+      // https://webkit.org/blog/516/webkit-page-cache-ii-the-unload-event/
+      win.addEventListener('pageshow', function onPageShow(e) {
+        if (e.persisted) {
+          restoreQuery();
+          win.removeEventListener('pageshow', onPageShow);
+        }
+      });
     }
   }
 
@@ -619,23 +595,6 @@ export class Navigation {
    * @private
    */
   handleHashNavigation_(e, toLocation, fromLocation) {
-    // Anchor navigation in IE doesn't change input focus, which can result in
-    // confusing behavior e.g. when pressing "tab" button.
-    // @see https://humanwhocodes.com/blog/2013/01/15/fixing-skip-to-content-links/
-    // @see https://github.com/ampproject/amphtml/issues/18671
-    if (Services.platformFor(this.ampdoc.win).isIe()) {
-      const id = toLocation.hash.substring(1);
-      const elementWithId = this.ampdoc.getElementById(id);
-      if (elementWithId) {
-        if (
-          !/^(?:a|select|input|button|textarea)$/i.test(elementWithId.tagName)
-        ) {
-          elementWithId.tabIndex = -1;
-        }
-        tryFocus(elementWithId);
-      }
-    }
-
     // We prevent default so that the current click does not push
     // into the history stack as this messes up the external documents
     // history which contains the amp document.
@@ -737,6 +696,46 @@ export class Navigation {
       getMode().test && !this.isEmbed_ ? this.ampdoc.win.location.href : '';
     return this.parseUrl_(baseHref);
   }
+
+  /**
+   * Requests navigation through a Viewer to the given destination.
+   *
+   * This function only proceeds if:
+   * 1. The viewer supports the 'interceptNavigation' capability.
+   * 2. The contained AMP doc has 'opted in' via including the 'allow-navigation-interception'
+   * attribute on the <html> tag.
+   * 3. The viewer is trusted or from localhost.
+   *
+   * @param {string} url A URL.
+   * @param {string} requestedBy Informational string about the entity that
+   *     requested the navigation.
+   * @return {boolean} Returns true if navigation message was sent to viewer.
+   *     Otherwise, returns false.
+   */
+  viewerInterceptsNavigation(url, requestedBy) {
+    const viewerHasCapability = this.viewer_.hasCapability(
+      'interceptNavigation'
+    );
+    const docOptedIn =
+      this.ampdoc.isSingleDoc() &&
+      this.ampdoc
+        .getRootNode()
+        .documentElement.hasAttribute('allow-navigation-interception');
+
+    if (
+      !viewerHasCapability ||
+      !docOptedIn ||
+      !(this.isTrustedViewer_ || this.isLocalViewer_)
+    ) {
+      return false;
+    }
+
+    this.viewer_.sendMessage('navigateTo', {
+      'url': url,
+      'requestedBy': requestedBy,
+    });
+    return true;
+  }
 }
 
 /**
@@ -771,11 +770,10 @@ function maybeExpandUrlParams(ampdoc, e) {
   const newHref = Services.urlReplacementsForDoc(target).expandUrlSync(
     hrefToExpand,
     vars,
-    undefined,
-    /* opt_whitelist */ {
+    /* opt_allowlist */ {
       // For now we only allow to replace the click location vars
       // and nothing else.
-      // NOTE: Addition to this whitelist requires additional review.
+      // NOTE: Addition to this allowlist requires additional review.
       'CLICK_X': true,
       'CLICK_Y': true,
     }

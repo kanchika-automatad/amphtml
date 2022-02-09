@@ -1,30 +1,14 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import * as _3p from '#3p/3p';
 
-import * as _3p from '../../../3p/3p';
 import {
   AD_TYPE,
   callbackWithBackfill,
   callbackWithNoBackfill,
   csa,
-  resizeDeniedHandler,
   resizeIframe,
-  resizeSuccessHandler,
-} from '../../../ads/google/csa';
-import {createIframePromise} from '../../../testing/iframe';
+} from '#ads/vendors/csa';
+
+import {createIframePromise} from '#testing/iframe';
 
 function getAds(type) {
   const generic = {ampSlotIndex: '0', height: 300, type: 'csa'};
@@ -48,13 +32,11 @@ function getAds(type) {
   }
 }
 
-describes.fakeWin('amp-ad-csa-impl', {}, () => {
-  let sandbox;
+describes.fakeWin('amp-ad-csa-impl', {}, (env) => {
   let win;
 
   beforeEach(() => {
-    sandbox = sinon.sandbox;
-    return createIframePromise(true).then(iframe => {
+    return createIframePromise(true).then((iframe) => {
       win = iframe.win;
       win.context = {
         initialIntersection: {
@@ -63,8 +45,6 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
           },
         },
         requestResize() {},
-        onResizeSuccess() {},
-        onResizeDenied() {},
         noContentAvailable() {},
         referrer: null,
       };
@@ -76,7 +56,6 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
 
   afterEach(() => {
     win.context = {};
-    sandbox.restore();
   });
 
   describe('inputs', () => {
@@ -92,11 +71,11 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
 
     beforeEach(() => {
       // Stub everything out
-      sandbox.stub(_3p, 'loadScript').callsFake((global, url, callback) => {
+      env.sandbox.stub(_3p, 'loadScript').callsFake((global, url, callback) => {
         callback();
       });
-      win._googCsa = function() {};
-      googCsaSpy = sandbox.stub(win, '_googCsa');
+      win._googCsa = function () {};
+      googCsaSpy = env.sandbox.stub(win, '_googCsa');
     });
 
     it('should request AFS', () => {
@@ -131,9 +110,9 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
             height: 0,
           },
         },
-        requestResize() {},
-        onResizeSuccess() {},
-        onResizeDenied() {},
+        requestResize() {
+          return Promise.resolve();
+        },
         noContentAvailable() {},
         referrer: null,
       };
@@ -170,25 +149,26 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
       setContainerHeight('300px');
       setContextHeight(100);
 
-      const requestResizeSpy = sandbox.stub(win.context, 'requestResize');
+      const requestResizeSpy = env.sandbox
+        .stub(win.context, 'requestResize')
+        .returns(Promise.reject());
 
       // Try to resize when ads are loaded
       resizeIframe(win, 'csacontainer');
 
-      const overflow = win.document.getElementById('overflow');
-      const container = win.document.getElementById('csacontainer');
-      const requestedHeight = requestResizeSpy.args[0][1];
+      return Promise.resolve().then(() => {
+        const overflow = win.document.getElementById('overflow');
+        const container = win.document.getElementById('csacontainer');
+        const requestedHeight = requestResizeSpy.args[0][1];
 
-      // Resize requests above the fold will be denied
-      resizeDeniedHandler(win, container, requestedHeight);
-
-      // Overflow should exist and be displayed
-      expect(overflow).to.not.be.null;
-      expect(overflow).not.to.have.display('none');
-      // We should have tried to resize to 300 px
-      expect(requestedHeight).to.equal(300);
-      // Container should be set to AMP height (100) - overflow height (40)
-      expect(container.style.height).to.equal('60px');
+        // Overflow should exist and be displayed
+        expect(overflow).to.not.be.null;
+        expect(overflow).not.to.have.display('none');
+        // We should have tried to resize to 300 px
+        expect(requestedHeight).to.equal(300);
+        // Container should be set to AMP height (100) - overflow height (40)
+        expect(container.style.height).to.equal('60px');
+      });
     });
 
     it('when ads are ATF and CSA container < AMP container', () => {
@@ -197,23 +177,24 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
       setContextHeight(400);
 
       // Set up
-      const requestResizeSpy = sandbox.stub(win.context, 'requestResize');
+      const requestResizeSpy = env.sandbox
+        .stub(win.context, 'requestResize')
+        .returns(Promise.reject());
       // Try to resize when ads are loaded
       resizeIframe(win, 'csacontainer');
 
-      const overflow = win.document.getElementById('overflow');
-      const container = win.document.getElementById('csacontainer');
-      const requestedHeight = requestResizeSpy.args[0][1];
+      return Promise.resolve().then(() => {
+        const overflow = win.document.getElementById('overflow');
+        const container = win.document.getElementById('csacontainer');
+        const requestedHeight = requestResizeSpy.args[0][1];
 
-      // Resize requests above the fold will be denied
-      resizeDeniedHandler(win, container, requestedHeight);
-
-      // Overflow should NOT be present
-      expect(overflow).to.be.null;
-      // We should have tried to resize to 300 px
-      expect(requestedHeight).to.equal(300);
-      // Container should not have been changed
-      expect(container.style.height).to.equal('300px');
+        // Overflow should NOT be present
+        expect(overflow).to.be.null;
+        // We should have tried to resize to 300 px
+        expect(requestedHeight).to.equal(300);
+        // Container should not have been changed
+        expect(container.style.height).to.equal('300px');
+      });
     });
 
     it('when ads are BTF and CSA container > AMP container', () => {
@@ -222,23 +203,26 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
       setContextHeight(100);
 
       // Set up
-      const requestResizeSpy = sandbox.stub(win.context, 'requestResize');
+      const requestResizeSpy = env.sandbox
+        .stub(win.context, 'requestResize')
+        .returns(Promise.resolve());
       // Try to resize when ads are loaded
       resizeIframe(win, 'csacontainer');
-      // Resize requests below the fold succeeed
-      const requestedHeight = requestResizeSpy.args[0][1];
 
-      const overflow = win.document.getElementById('overflow');
-      const container = win.document.getElementById('csacontainer');
+      return Promise.resolve().then(() => {
+        // Resize requests below the fold succeeed
+        const requestedHeight = requestResizeSpy.args[0][1];
 
-      resizeSuccessHandler(win, container, requestedHeight);
+        const overflow = win.document.getElementById('overflow');
+        const container = win.document.getElementById('csacontainer');
 
-      // Overflow should be present, but hidden
-      expect(overflow).to.have.display('none');
-      // We should have tried to resize to 300 px
-      expect(requestedHeight).to.equal(300);
-      // Container should be set to full CSA height
-      expect(container.style.height).to.equal('300px');
+        // Overflow should be present, but hidden
+        expect(overflow).to.have.display('none');
+        // We should have tried to resize to 300 px
+        expect(requestedHeight).to.equal(300);
+        // Container should be set to full CSA height
+        expect(container.style.height).to.equal('300px');
+      });
     });
 
     it('when ads are BTF and CSA container < AMP container', () => {
@@ -247,22 +231,26 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
       setContextHeight(400);
 
       // Set up
-      const requestResizeSpy = sandbox.stub(win.context, 'requestResize');
+      const requestResizeSpy = env.sandbox
+        .stub(win.context, 'requestResize')
+        .returns(Promise.resolve());
       // Try to resize when ads are loaded
       resizeIframe(win, 'csacontainer');
-      // Resize requests below the fold succeed
-      const requestedHeight = requestResizeSpy.args[0][1];
-      resizeSuccessHandler(win, container, requestedHeight);
 
-      const overflow = win.document.getElementById('overflow');
-      const container = win.document.getElementById('csacontainer');
+      return Promise.resolve().then(() => {
+        // Resize requests below the fold succeed
+        const requestedHeight = requestResizeSpy.args[0][1];
 
-      // Overflow should not exist
-      expect(overflow).to.be.null;
-      // We should have tried to resize to 300 px
-      expect(requestedHeight).to.equal(300);
-      // Container should be set to full CSA height
-      expect(container.style.height).to.equal('300px');
+        const overflow = win.document.getElementById('overflow');
+        const container = win.document.getElementById('csacontainer');
+
+        // Overflow should not exist
+        expect(overflow).to.be.null;
+        // We should have tried to resize to 300 px
+        expect(requestedHeight).to.equal(300);
+        // Container should be set to full CSA height
+        expect(container.style.height).to.equal('300px');
+      });
     });
 
     it('when ads do not load', () => {
@@ -270,7 +258,7 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
       setContextHeight(400);
 
       // Set up
-      const noAdsSpy = sandbox.stub(win.context, 'noContentAvailable');
+      const noAdsSpy = env.sandbox.stub(win.context, 'noContentAvailable');
       // No backfill, ads don't load
       callbackWithNoBackfill(win, 'csacontainer', false);
 
@@ -282,9 +270,9 @@ describes.fakeWin('amp-ad-csa-impl', {}, () => {
       setContextHeight(400);
 
       // Set up stubs and spys
-      const noAdsSpy = sandbox.stub(win.context, 'noContentAvailable');
-      win._googCsa = function() {};
-      const _googCsaSpy = sandbox.stub(win, '_googCsa').callsFake(() => {});
+      const noAdsSpy = env.sandbox.stub(win.context, 'noContentAvailable');
+      win._googCsa = function () {};
+      const _googCsaSpy = env.sandbox.stub(win, '_googCsa').callsFake(() => {});
 
       // Ads don't load but there is backfill
       callbackWithBackfill(win, {}, {}, 'csacontainer', false);

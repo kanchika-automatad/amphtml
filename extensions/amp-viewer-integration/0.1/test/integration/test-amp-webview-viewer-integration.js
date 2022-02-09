@@ -1,26 +1,10 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {AmpViewerIntegration} from '../../amp-viewer-integration';
-import {WebviewViewerForTesting} from '../../webview-viewer-for-testing.js';
+import {WebviewViewerForTesting} from '../../webview-viewer-for-testing';
 
-describes.sandboxed('AmpWebviewViewerIntegration', {}, () => {
+describes.sandboxed('AmpWebviewViewerIntegration', {}, (env) => {
   const ampDocSrc = '/test/fixtures/served/ampdoc-with-messaging.html';
   // TODO(aghassemi): Investigate failure in beforeEach. #10974.
-  describe.skip('Handshake', function() {
+  describe.skip('Handshake', function () {
     let viewerEl;
     let viewer;
 
@@ -46,7 +30,7 @@ describes.sandboxed('AmpWebviewViewerIntegration', {}, () => {
 
     it('should handle unload correctly', () => {
       return viewer.waitForDocumentLoaded().then(() => {
-        const stub = sandbox.stub(viewer, 'handleUnload_');
+        const stub = env.sandbox.stub(viewer, 'handleUnload_');
         window.eventListeners.fire({type: 'unload'});
         expect(stub).to.be.calledOnce;
       });
@@ -63,7 +47,7 @@ describes.sandboxed('AmpWebviewViewerIntegration', {}, () => {
         },
       },
     },
-    env => {
+    (env) => {
       let integr;
 
       beforeEach(() => {
@@ -72,7 +56,7 @@ describes.sandboxed('AmpWebviewViewerIntegration', {}, () => {
       });
 
       it('should set source and origin for webview', () => {
-        const stub = sandbox
+        const stub = env.sandbox
           .stub(integr, 'webviewPreHandshakePromise_')
           .callsFake(() => new Promise(() => {}));
         integr.init();

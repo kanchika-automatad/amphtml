@@ -1,37 +1,44 @@
-/* eslint-disable no-unused-vars */
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 
-import {Deferred} from '../../../src/utils/promise';
-import {Layout, isLayoutSizeDefined} from '../../../src/layout';
-import {Services} from '../../../src/services';
-import {VideoAttributes, VideoEvents} from '../../../src/video-interface';
-
-import {dev, userAssert} from '../../../src/log';
+import {Deferred} from '#core/data-structures/promise';
+import {removeElement} from '#core/dom';
 import {
   fullscreenEnter,
   fullscreenExit,
   isFullscreenElement,
-  removeElement,
-} from '../../../src/dom';
-import {getData, listen} from '../../../src/event-helper';
+} from '#core/dom/fullscreen';
+import {
+  Layout_Enum,
+  applyFillContent,
+  isLayoutSizeDefined,
+} from '#core/dom/layout';
+import {propagateAttributes} from '#core/dom/propagate-attributes';
+
+import {Services} from '#service';
+import {installVideoManagerForDoc} from '#service/video-manager-impl';
+
+import {getData, listen} from '#utils/event-helper';
+import {dev, userAssert} from '#utils/log';
+
 import {getIframe} from '../../../src/3p-frame';
-import {installVideoManagerForDoc} from '../../../src/service/video-manager-impl';
+import {redispatch} from '../../../src/iframe-video';
+import {
+  VideoAttributes_Enum,
+  VideoEvents_Enum,
+} from '../../../src/video-interface';
 
 const TAG = 'amp-viqeo-player';
+
+const EVENTS = {
+  'ready': VideoEvents_Enum.LOAD,
+  'play': VideoEvents_Enum.PLAYING,
+  'pause': VideoEvents_Enum.PAUSE,
+  'mute': VideoEvents_Enum.MUTED,
+  'unmute': VideoEvents_Enum.UNMUTED,
+  'end': VideoEvents_Enum.ENDED,
+  'startAdvert': VideoEvents_Enum.AD_START,
+  'endAdvert': VideoEvents_Enum.AD_END,
+};
 
 /**
  * @implements {../../../src/video-interface.VideoInterface}
@@ -50,20 +57,17 @@ class AmpViqeoPlayer extends AMP.BaseElement {
     /** @private {?Function} */
     this.playerReadyResolver_ = null;
 
-    /** @private {?number} */
-    this.volume_ = null;
-
     /** @private {?Function} */
     this.unlistenMessage_ = null;
-
-    /** @private {?Object} */
-    this.viqeoPlayer_ = null;
 
     /** @private {boolean} */
     this.hasAutoplay_ = false;
 
     /** @private {string} */
     this.videoId_ = '';
+
+    /** @private {Object<string, (number|Array)>} */
+    this.meta_ = {};
   }
 
   /**
@@ -71,12 +75,20 @@ class AmpViqeoPlayer extends AMP.BaseElement {
    * @override
    */
   preconnectCallback(opt_onLayout) {
-    this.preconnect.url('https://api.viqeo.tv', opt_onLayout);
-    this.preconnect.url('https://cdn.viqeo.tv', opt_onLayout);
+    Services.preconnectFor(this.win).url(
+      this.getAmpDoc(),
+      'https://api.viqeo.tv',
+      opt_onLayout
+    );
+    Services.preconnectFor(this.win).url(
+      this.getAmpDoc(),
+      'https://cdn.viqeo.tv',
+      opt_onLayout
+    );
   }
 
   /**
-   * @param {!Layout} layout
+   * @param {!Layout_Enum} layout
    * @return {boolean}
    * @override
    */
@@ -98,7 +110,9 @@ class AmpViqeoPlayer extends AMP.BaseElement {
       this.element
     );
 
-    this.hasAutoplay_ = this.element.hasAttribute(VideoAttributes.AUTOPLAY);
+    this.hasAutoplay_ = this.element.hasAttribute(
+      VideoAttributes_Enum.AUTOPLAY
+    );
 
     const deferred = new Deferred();
     this.playerReadyPromise_ = deferred.promise;
@@ -106,6 +120,7 @@ class AmpViqeoPlayer extends AMP.BaseElement {
 
     installVideoManagerForDoc(this.element);
     Services.videoManagerForDoc(this.element).register(this);
+    this.playerReadyResolver_(this.iframe_);
   }
 
   /** @override */
@@ -121,6 +136,7 @@ class AmpViqeoPlayer extends AMP.BaseElement {
         allowFullscreen: true,
       }
     );
+    iframe.title = this.element.title || 'Viqeo video';
 
     // required to display the user gesture in the iframe
     iframe.setAttribute('allow', 'autoplay');
@@ -134,7 +150,7 @@ class AmpViqeoPlayer extends AMP.BaseElement {
     return this.mutateElement(() => {
       this.element.appendChild(iframe);
       this.iframe_ = iframe;
-      this.applyFillContent(iframe);
+      applyFillContent(iframe);
     }).then(() => {
       return this.playerReadyPromise_;
     });
@@ -154,26 +170,16 @@ class AmpViqeoPlayer extends AMP.BaseElement {
     ) {
       return;
     }
-
     const action = eventData['action'];
-    if (action === 'ready') {
-      this.element.dispatchCustomEvent(VideoEvents.LOAD);
-      this.playerReadyResolver_(this.iframe_);
-    } else if (action === 'play') {
-      this.element.dispatchCustomEvent(VideoEvents.PLAYING);
-    } else if (action === 'pause') {
-      this.element.dispatchCustomEvent(VideoEvents.PAUSE);
-    } else if (action === 'mute') {
-      this.element.dispatchCustomEvent(VideoEvents.MUTED);
-    } else if (action === 'unmute') {
-      this.element.dispatchCustomEvent(VideoEvents.UNMUTED);
-    } else if (action === 'volume') {
-      this.volume_ = parseFloat(eventData['value']);
-      if (this.volume_ === 0) {
-        this.element.dispatchCustomEvent(VideoEvents.MUTED);
-      } else {
-        this.element.dispatchCustomEvent(VideoEvents.UNMUTED);
-      }
+    if (redispatch(this.element, action, EVENTS)) {
+      return;
+    }
+    if (action.startsWith('update')) {
+      const key = action.replace(
+        /^update([A-Z])(.*)$/,
+        (_, c, rest) => c.toLowerCase() + rest
+      );
+      this.meta_[key] = eventData['value'];
     }
   }
 
@@ -195,8 +201,12 @@ class AmpViqeoPlayer extends AMP.BaseElement {
 
   /** @override */
   createPlaceholderCallback() {
-    const placeholder = this.element.ownerDocument.createElement('amp-img');
-    this.propagateAttributes(['aria-label'], placeholder);
+    const placeholder = this.element.ownerDocument.createElement('img');
+    propagateAttributes(['aria-label'], this.element, placeholder);
+    applyFillContent(placeholder);
+    placeholder.setAttribute('loading', 'lazy');
+    placeholder.setAttribute('placeholder', '');
+    placeholder.setAttribute('referrerpolicy', 'origin');
     if (placeholder.hasAttribute('aria-label')) {
       placeholder.setAttribute(
         'alt',
@@ -209,10 +219,7 @@ class AmpViqeoPlayer extends AMP.BaseElement {
       'src',
       `https://cdn.viqeo.tv/preview/${encodeURIComponent(this.videoId_)}.jpg`
     );
-    placeholder.setAttribute('layout', 'fill');
-    placeholder.setAttribute('placeholder', '');
-    placeholder.setAttribute('referrerpolicy', 'origin');
-    this.applyFillContent(placeholder);
+
     return placeholder;
   }
 
@@ -301,24 +308,19 @@ class AmpViqeoPlayer extends AMP.BaseElement {
 
   /** @override */
   getCurrentTime() {
-    if (!this.viqeoPlayer_) {
-      return 0;
-    }
-    return this.viqeoPlayer_.getCurrentTime();
+    return /** @type {number} */ (this.meta_['currentTime'] || 0);
   }
 
   /** @override */
   getDuration() {
-    if (!this.viqeoPlayer_) {
-      return 1;
-    }
-    return this.viqeoPlayer_.getDuration();
+    return /** @type {number} */ (this.meta_['duration'] || 1);
   }
 
   /** @override */
   getPlayedRanges() {
-    // Not supported.
-    return [];
+    return /** @type {!Array<!Array<number>>} */ (
+      this.meta_['playedRanges'] || []
+    );
   }
 
   /**
@@ -349,7 +351,7 @@ class AmpViqeoPlayer extends AMP.BaseElement {
   }
 }
 
-AMP.extension(TAG, '0.1', AMP => {
+AMP.extension(TAG, '0.1', (AMP) => {
   AMP.registerElement(TAG, AmpViqeoPlayer);
 });
 

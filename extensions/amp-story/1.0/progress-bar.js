@@ -1,32 +1,29 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {EventType} from './events';
-import {POLL_INTERVAL_MS} from './page-advancement';
-import {Services} from '../../../src/services';
+import {removeChildren} from '#core/dom';
+import {escapeCssSelectorNth} from '#core/dom/css-selectors';
+import * as Preact from '#core/dom/jsx';
+import {scopedQuerySelector} from '#core/dom/query';
+import {scale, setImportantStyles} from '#core/dom/style';
+import {debounce} from '#core/types/function';
+import {hasOwn, map} from '#core/types/object';
+
+import {
+  BranchToTimeValues,
+  StoryAdSegmentExp,
+} from '#experiments/story-ad-progress-segment';
+
+import {Services} from '#service';
+
+import {dev, devAssert} from '#utils/log';
+
+import {getExperimentBranch} from 'src/experiments';
+
 import {
   StateProperty,
   UIType,
   getStoreService,
 } from './amp-story-store-service';
-import {debounce} from '../../../src/utils/rate-limit';
-import {dev, devAssert} from '../../../src/log';
-import {escapeCssSelectorNth} from '../../../src/css';
-import {hasOwn, map} from '../../../src/utils/object';
-import {removeChildren, scopedQuerySelector} from '../../../src/dom';
-import {scale, setImportantStyles} from '../../../src/style';
+import {EventType} from './events';
+import {POLL_INTERVAL_MS} from './page-advancement';
 
 /**
  * Transition used to show the progress of a media. Has to be linear so the
@@ -79,9 +76,6 @@ export class ProgressBar {
     /** @private @const {!Window} */
     this.win_ = win;
 
-    /** @private {boolean} */
-    this.isBuilt_ = false;
-
     /** @private {?Element} */
     this.root_ = null;
 
@@ -97,8 +91,8 @@ export class ProgressBar {
     /** @private {!../../../src/service/ampdoc-impl.AmpDoc} */
     this.ampdoc_ = Services.ampdocServiceFor(this.win_).getSingleDoc();
 
-    /** @private @const {!../../../src/service/resources-interface.ResourcesInterface} */
-    this.resources_ = Services.resourcesForDoc(this.ampdoc_);
+    /** @private @const {!../../../src/service/mutator-interface.MutatorInterface} */
+    this.mutator_ = Services.mutatorForDoc(this.ampdoc_);
 
     /** @private {!Object<string, number>} */
     this.segmentIdMap_ = map();
@@ -124,6 +118,9 @@ export class ProgressBar {
 
     /** @private {!Element} */
     this.storyEl_ = storyEl;
+
+    /** @private {?Element} */
+    this.currentAdSegment_ = null;
   }
 
   /**
@@ -141,35 +138,36 @@ export class ProgressBar {
    * @return {!Element}
    */
   build(initialSegmentId) {
-    if (this.isBuilt_) {
-      return this.getRoot();
+    if (this.root_) {
+      return this.root_;
     }
 
-    this.root_ = this.win_.document.createElement('ol');
-    this.root_.classList.add('i-amphtml-story-progress-bar');
+    const root = (
+      <ol aria-hidden="true" class="i-amphtml-story-progress-bar"></ol>
+    );
+    this.root_ = root;
+
     this.storyEl_.addEventListener(EventType.REPLAY, () => {
       this.replay_();
     });
 
     this.storeService_.subscribe(
       StateProperty.PAGE_IDS,
-      pageIds => {
-        if (this.isBuilt_) {
+      (pageIds) => {
+        const attached = !!root.parentElement;
+        if (attached) {
           this.clear_();
         }
 
-        this.segmentsAddedPromise_ = this.resources_.mutateElement(
-          this.getRoot(),
-          () => {
-            pageIds.forEach(id => {
-              if (!(id in this.segmentIdMap_)) {
-                this.addSegment_(id);
-              }
-            });
-          }
-        );
+        this.segmentsAddedPromise_ = this.mutator_.mutateElement(root, () => {
+          /** @type {!Array} */ (pageIds).forEach((id) => {
+            if (!(id in this.segmentIdMap_)) {
+              this.addSegment_(id);
+            }
+          });
+        });
 
-        if (this.isBuilt_) {
+        if (attached) {
           this.updateProgress(
             this.activeSegmentId_,
             this.activeSegmentProgress_,
@@ -182,7 +180,7 @@ export class ProgressBar {
 
     this.storeService_.subscribe(
       StateProperty.RTL_STATE,
-      rtlState => {
+      (rtlState) => {
         this.onRtlStateUpdate_(rtlState);
       },
       true /** callToInitialize */
@@ -190,14 +188,18 @@ export class ProgressBar {
 
     this.storeService_.subscribe(
       StateProperty.UI_STATE,
-      uiState => {
+      (uiState) => {
         this.onUIStateUpdate_(uiState);
       },
       true /** callToInitialize */
     );
 
+    this.storeService_.subscribe(StateProperty.AD_STATE, (adState) => {
+      this.onAdStateUpdate_(adState);
+    });
+
     Services.viewportForDoc(this.ampdoc_).onResize(
-      debounce(this.win_, () => this.onResize_(), 30)
+      debounce(this.win_, () => this.onResize_(), 300)
     );
 
     this.segmentsAddedPromise_.then(() => {
@@ -208,14 +210,13 @@ export class ProgressBar {
 
         this.render_(false /** shouldAnimate */);
       }
-      this.getRoot().classList.toggle(
+      root.classList.toggle(
         'i-amphtml-progress-bar-overflow',
         this.segmentCount_ > MAX_SEGMENTS
       );
     });
 
-    this.isBuilt_ = true;
-    return this.getRoot();
+    return root;
   }
 
   /**
@@ -235,13 +236,13 @@ export class ProgressBar {
    * @private
    */
   render_(shouldAnimate = true) {
-    this.getSegmentWidth_().then(segmentWidth => {
+    this.getSegmentWidth_().then((segmentWidth) => {
       let translateX =
         -(this.firstExpandedSegmentIndex_ - this.getPrevEllipsisCount_()) *
         (ELLIPSE_WIDTH_PX + SEGMENTS_MARGIN_PX);
 
-      this.resources_.mutateElement(this.getRoot(), () => {
-        this.getRoot().classList.toggle(
+      this.mutator_.mutateElement(this.getRoot_(), () => {
+        this.getRoot_().classList.toggle(
           'i-amphtml-animate-progress',
           shouldAnimate
         );
@@ -275,8 +276,9 @@ export class ProgressBar {
     // http://mir.aculo.us/2011/12/07/the-case-of-the-disappearing-element/
     segment.setAttribute(
       'style',
-      `transform: translate3d(${translateX}px, 0px, 0.00001px) scaleX(${width /
-        ELLIPSE_WIDTH_PX});`
+      `transform: translate3d(${translateX}px, 0px, 0.00001px) scaleX(${
+        width / ELLIPSE_WIDTH_PX
+      });`
     );
   }
 
@@ -291,7 +293,7 @@ export class ProgressBar {
     const totalEllipsisWidth =
       (nextEllipsisCount + prevEllipsisCount) *
       (ELLIPSE_WIDTH_PX + SEGMENTS_MARGIN_PX);
-    return this.getBarWidth_().then(barWidth => {
+    return this.getBarWidth_().then((barWidth) => {
       const totalSegmentsWidth = barWidth - totalEllipsisWidth;
 
       return (
@@ -307,8 +309,8 @@ export class ProgressBar {
    * @private
    */
   getBarWidth_() {
-    return this.resources_.measureElement(() => {
-      return this.getRoot()./*OK*/ getBoundingClientRect().width;
+    return this.mutator_.measureElement(() => {
+      return this.getRoot_()./*OK*/ getBoundingClientRect().width;
     });
   }
 
@@ -373,10 +375,10 @@ export class ProgressBar {
    * @private
    */
   onRtlStateUpdate_(rtlState) {
-    this.resources_.mutateElement(this.getRoot(), () => {
+    this.mutator_.mutateElement(this.getRoot_(), () => {
       rtlState
-        ? this.getRoot().setAttribute('dir', 'rtl')
-        : this.getRoot().removeAttribute('dir');
+        ? this.getRoot_().setAttribute('dir', 'rtl')
+        : this.getRoot_().removeAttribute('dir');
     });
   }
 
@@ -388,7 +390,7 @@ export class ProgressBar {
     // We need to take into account both conditionals since we could've switched
     // from a screen that had an overflow to one that doesn't and viceversa.
     if (
-      this.getRoot().classList.contains('i-amphtml-progress-bar-overflow') ||
+      this.getRoot_().classList.contains('i-amphtml-progress-bar-overflow') ||
       this.segmentCount_ > MAX_SEGMENTS
     ) {
       this.getInitialFirstExpandedSegmentIndex_(this.activeSegmentIndex_);
@@ -411,13 +413,69 @@ export class ProgressBar {
         MAX_SEGMENTS = 20;
         ELLIPSE_WIDTH_PX = 2;
         break;
-      case UIType.DESKTOP_PANELS:
-        MAX_SEGMENTS = 20;
-        ELLIPSE_WIDTH_PX = 3;
-        break;
       default:
         MAX_SEGMENTS = 20;
     }
+  }
+
+  /**
+   * Show/hide ad progress bar treatment based on ad visibility.
+   * @param {boolean} adState
+   * TODO(#33969) clean up experiment is launched.
+   */
+  onAdStateUpdate_(adState) {
+    const segmentExpBranch = getExperimentBranch(
+      this.win_,
+      StoryAdSegmentExp.ID
+    );
+    if (
+      !segmentExpBranch ||
+      segmentExpBranch === StoryAdSegmentExp.CONTROL ||
+      segmentExpBranch === StoryAdSegmentExp.NO_ADVANCE_BOTH ||
+      segmentExpBranch === StoryAdSegmentExp.NO_ADVANCE_AD
+    ) {
+      return;
+    }
+    // Set CSS signal that we are in the experiment.
+    if (!this.root_.hasAttribute('i-amphtml-ad-progress-exp')) {
+      this.root_.setAttribute('i-amphtml-ad-progress-exp', '');
+    }
+    adState
+      ? this.createAdSegment_(BranchToTimeValues[segmentExpBranch])
+      : this.removeAdSegment_();
+  }
+
+  /**
+   * Create ad progress segment that will be shown when ad is visible.
+   * TODO(#33969) remove variable animation duration when best value is chosen.
+   * @param {string} animationDuration
+   */
+  createAdSegment_(animationDuration) {
+    const index = this.storeService_.get(StateProperty.CURRENT_PAGE_INDEX);
+    // Fill in segment before ad segment.
+    this.updateProgressByIndex_(index, 1, false);
+    const progressEl = this.getRoot_()?.querySelector(
+      `.i-amphtml-story-page-progress-bar:nth-child(${escapeCssSelectorNth(
+        // +2 because of zero-index and we want the chip after the ad.
+        index + 2
+      )})`
+    );
+    const adSegment = (
+      <div
+        class="i-amphtml-story-ad-progress-value"
+        style={{animationDuration}}
+      ></div>
+    );
+    this.currentAdSegment_ = adSegment;
+    progressEl.appendChild(adSegment);
+  }
+
+  /**
+   * Remove active ad progress segment when ad is navigated away from
+   */
+  removeAdSegment_() {
+    this.currentAdSegment_?.parentNode.removeChild(this.currentAdSegment_);
+    this.currentAdSegment_ = null;
   }
 
   /**
@@ -426,12 +484,12 @@ export class ProgressBar {
    * @private
    */
   buildSegmentEl_() {
-    const segmentProgressBar = this.win_.document.createElement('li');
-    segmentProgressBar.classList.add('i-amphtml-story-page-progress-bar');
-    const segmentProgressValue = this.win_.document.createElement('div');
-    segmentProgressValue.classList.add('i-amphtml-story-page-progress-value');
-    segmentProgressBar.appendChild(segmentProgressValue);
-    this.getRoot().appendChild(segmentProgressBar);
+    const segmentProgressBar = (
+      <li class="i-amphtml-story-page-progress-bar">
+        <div class="i-amphtml-story-page-progress-value"></div>
+      </li>
+    );
+    this.getRoot_().appendChild(segmentProgressBar);
     this.segments_.push(segmentProgressBar);
   }
 
@@ -456,11 +514,10 @@ export class ProgressBar {
   }
 
   /**
-   * Gets the root element of the progress bar.
-   *
    * @return {!Element}
+   * @private
    */
-  getRoot() {
+  getRoot_() {
     return dev().assertElement(this.root_);
   }
 
@@ -602,12 +659,12 @@ export class ProgressBar {
     // JavaScript indices start at 0.
     const nthChildIndex = segmentIndex + 1;
     const progressEl = scopedQuerySelector(
-      this.getRoot(),
+      this.getRoot_(),
       `.i-amphtml-story-page-progress-bar:nth-child(${escapeCssSelectorNth(
         nthChildIndex
       )}) .i-amphtml-story-page-progress-value`
     );
-    this.resources_.mutateElement(devAssert(progressEl), () => {
+    this.mutator_.mutateElement(devAssert(progressEl), () => {
       let transition = 'none';
       if (withTransition) {
         // Using an eased transition only if filling the bar to 0 or 1.

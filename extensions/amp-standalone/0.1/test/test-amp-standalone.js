@@ -1,22 +1,6 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {StandaloneService} from '../amp-standalone';
 
-describes.sandboxed('amp-standalone', {}, () => {
+describes.sandboxed('amp-standalone', {}, (env) => {
   let fakeAmpdoc;
 
   beforeEach(() => {
@@ -33,10 +17,10 @@ describes.sandboxed('amp-standalone', {}, () => {
   it('should not react for <button> tags', () => {
     const service = new StandaloneService(fakeAmpdoc);
     class PlatformFake {}
-    PlatformFake.prototype.isSafari = sandbox.stub().returns(true);
-    PlatformFake.prototype.isChrome = sandbox.stub().returns(false);
-    sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
-    const handlerStub = sandbox.stub(service, 'handleSafariStandalone_');
+    PlatformFake.prototype.isSafari = env.sandbox.stub().returns(true);
+    PlatformFake.prototype.isChrome = env.sandbox.stub().returns(false);
+    env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+    const handlerStub = env.sandbox.stub(service, 'handleSafariStandalone_');
 
     const fakeEvent = {
       target: {
@@ -52,10 +36,10 @@ describes.sandboxed('amp-standalone', {}, () => {
   it('should react for <a> tags', () => {
     const service = new StandaloneService(fakeAmpdoc);
     class PlatformFake {}
-    PlatformFake.prototype.isSafari = sandbox.stub().returns(true);
-    PlatformFake.prototype.isChrome = sandbox.stub().returns(false);
-    sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
-    const handlerStub = sandbox.stub(service, 'handleSafariStandalone_');
+    PlatformFake.prototype.isSafari = env.sandbox.stub().returns(true);
+    PlatformFake.prototype.isChrome = env.sandbox.stub().returns(false);
+    env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+    const handlerStub = env.sandbox.stub(service, 'handleSafariStandalone_');
 
     const fakeEvent = {
       target: {
@@ -73,9 +57,9 @@ describes.sandboxed('amp-standalone', {}, () => {
       fakeAmpdoc.win.origin = 'http://www.example.com';
       const service = new StandaloneService(fakeAmpdoc);
       class PlatformFake {}
-      PlatformFake.prototype.isSafari = sandbox.stub().returns(true);
-      PlatformFake.prototype.isChrome = sandbox.stub().returns(false);
-      sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+      PlatformFake.prototype.isSafari = env.sandbox.stub().returns(true);
+      PlatformFake.prototype.isChrome = env.sandbox.stub().returns(false);
+      env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
 
       const fakeEvent = {
         target: {
@@ -98,9 +82,9 @@ describes.sandboxed('amp-standalone', {}, () => {
       fakeAmpdoc.win.origin = 'http://www.example.com';
       const service = new StandaloneService(fakeAmpdoc);
       class PlatformFake {}
-      PlatformFake.prototype.isSafari = sandbox.stub().returns(true);
-      PlatformFake.prototype.isChrome = sandbox.stub().returns(false);
-      sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+      PlatformFake.prototype.isSafari = env.sandbox.stub().returns(true);
+      PlatformFake.prototype.isChrome = env.sandbox.stub().returns(false);
+      env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
 
       const fakeEvent = {
         target: {
@@ -119,9 +103,9 @@ describes.sandboxed('amp-standalone', {}, () => {
       fakeAmpdoc.win.origin = 'http://www.example.com';
       const service = new StandaloneService(fakeAmpdoc);
       class PlatformFake {}
-      PlatformFake.prototype.isSafari = sandbox.stub().returns(true);
-      PlatformFake.prototype.isChrome = sandbox.stub().returns(false);
-      sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+      PlatformFake.prototype.isSafari = env.sandbox.stub().returns(true);
+      PlatformFake.prototype.isChrome = env.sandbox.stub().returns(false);
+      env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
 
       const fakeEvent = {
         target: {
@@ -142,9 +126,9 @@ describes.sandboxed('amp-standalone', {}, () => {
       fakeAmpdoc.win.origin = 'http://www.example.com';
       const service = new StandaloneService(fakeAmpdoc);
       class PlatformFake {}
-      PlatformFake.prototype.isSafari = sandbox.stub().returns(false);
-      PlatformFake.prototype.isChrome = sandbox.stub().returns(true);
-      sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+      PlatformFake.prototype.isSafari = env.sandbox.stub().returns(false);
+      PlatformFake.prototype.isChrome = env.sandbox.stub().returns(true);
+      env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
 
       const fakeEvent = {
         target: {
@@ -163,9 +147,9 @@ describes.sandboxed('amp-standalone', {}, () => {
       fakeAmpdoc.win.origin = 'http://www.example.com';
       const service = new StandaloneService(fakeAmpdoc);
       class PlatformFake {}
-      PlatformFake.prototype.isSafari = sandbox.stub().returns(false);
-      PlatformFake.prototype.isChrome = sandbox.stub().returns(true);
-      sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+      PlatformFake.prototype.isSafari = env.sandbox.stub().returns(false);
+      PlatformFake.prototype.isChrome = env.sandbox.stub().returns(true);
+      env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
 
       const fakeEvent = {
         target: {
@@ -184,9 +168,9 @@ describes.sandboxed('amp-standalone', {}, () => {
       fakeAmpdoc.win.origin = 'http://www.example.com';
       const service = new StandaloneService(fakeAmpdoc);
       class PlatformFake {}
-      PlatformFake.prototype.isSafari = sandbox.stub().returns(false);
-      PlatformFake.prototype.isChrome = sandbox.stub().returns(true);
-      sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
+      PlatformFake.prototype.isSafari = env.sandbox.stub().returns(false);
+      PlatformFake.prototype.isChrome = env.sandbox.stub().returns(true);
+      env.sandbox.stub(service, 'getPlatform_').returns(new PlatformFake());
 
       const fakeEvent = {
         target: {

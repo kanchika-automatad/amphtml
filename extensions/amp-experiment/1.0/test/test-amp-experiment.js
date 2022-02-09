@@ -1,24 +1,10 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {toggleExperiment} from '#experiments';
 
+import {Services} from '#service';
+
+import {AmpExperiment} from '../amp-experiment';
 import * as applyExperiment from '../apply-experiment';
 import * as variant from '../variant';
-import {AmpExperiment} from '../amp-experiment';
-import {Services} from '../../../../src/services';
-import {toggleExperiment} from '../../../../src/experiments';
 
 describes.realWin(
   'amp-experiment',
@@ -27,7 +13,7 @@ describes.realWin(
       extensions: ['amp-experiment:1.0'],
     },
   },
-  env => {
+  (env) => {
     // Config has empty mutations
     // As mutation parser tests will handle this
     const config = {
@@ -91,7 +77,7 @@ describes.realWin(
 
     function stubAllocateVariant(sandbox, config) {
       const viewer = Services.viewerForDoc(ampdoc);
-      const stub = sandbox.stub(variant, 'allocateVariant');
+      const stub = env.sandbox.stub(variant, 'allocateVariant');
       stub
         .withArgs(ampdoc, viewer, 'experiment-1', config['experiment-1'])
         .returns(Promise.resolve('variant-a'));
@@ -103,17 +89,6 @@ describes.realWin(
         .returns(Promise.resolve(null));
       return stub;
     }
-
-    it('Rejects because experiment is not enabled', () => {
-      toggleExperiment(win, 'amp-experiment-1.0', false);
-
-      expectAsyncConsoleError(/Experiment/);
-      addConfigElement('script');
-      doc.body.appendChild(el);
-      return experiment
-        .buildCallback()
-        .should.eventually.be.rejectedWith(/Experiment/);
-    });
 
     it('should not throw on valid config', () => {
       expect(() => {
@@ -156,15 +131,15 @@ describes.realWin(
 
     it('should throw if the child script element has non-JSON content', () => {
       addConfigElement('script', 'application/json', '{not json}');
-      expectAsyncConsoleError();
+      expectAsyncConsoleError(/.*/);
       return experiment.buildCallback().then(
         () => {
           throw new Error('must have failed');
         },
         () => {
           return Services.variantsForDocOrNull(ampdoc.getHeadNode())
-            .then(service => service.getVariants())
-            .then(variants => {
+            .then((service) => service.getVariants())
+            .then((variants) => {
               expect(variants).to.deep.equal({});
             });
         }
@@ -174,15 +149,15 @@ describes.realWin(
     it('should match the variant to the experiment', () => {
       addConfigElement('script');
 
-      stubAllocateVariant(sandbox, config);
-      const applyStub = sandbox
+      stubAllocateVariant(env.sandbox, config);
+      const applyStub = env.sandbox
         .stub(applyExperiment, 'applyExperimentToVariant')
         .returns(Promise.resolve());
 
       experiment.buildCallback();
       return Services.variantsForDocOrNull(ampdoc.getHeadNode())
-        .then(variantsService => variantsService.getVariants())
-        .then(variants => {
+        .then((variantsService) => variantsService.getVariants())
+        .then((variants) => {
           expect(applyStub).to.be.calledOnce;
           expect(variants).to.jsonEqual({
             'experiment-1': 'variant-a',
@@ -198,17 +173,17 @@ describes.realWin(
       () => {
         addConfigElement('script');
 
-        stubAllocateVariant(sandbox, config);
-        const applyStub = sandbox
+        stubAllocateVariant(env.sandbox, config);
+        const applyStub = env.sandbox
           .stub(applyExperiment, 'applyExperimentToVariant')
           .returns(Promise.resolve());
 
-        sandbox.stub(ampdoc, 'getParam').returns('true');
+        env.sandbox.stub(ampdoc, 'getParam').returns('true');
 
         experiment.buildCallback();
         return Services.variantsForDocOrNull(ampdoc.getHeadNode())
-          .then(variantsService => variantsService.getVariants())
-          .then(variants => {
+          .then((variantsService) => variantsService.getVariants())
+          .then((variants) => {
             expect(variants).to.jsonEqual({
               'experiment-1': null,
               'experiment-2': null,

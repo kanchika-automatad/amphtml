@@ -1,22 +1,9 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {debounce} from '#core/types/function';
+
+import {getDetail, listen, listenOnce} from '#utils/event-helper';
 
 import {ActionSource} from './action-source';
-import {debounce} from '../../../src/utils/rate-limit';
-import {listen, listenOnce} from '../../../src/event-helper';
+import {CarouselEvents} from './carousel-events';
 
 const MIN_AUTO_ADVANCE_INTERVAL = 1000;
 
@@ -41,11 +28,13 @@ export class AutoAdvance {
   /**
    * @param {{
    *   win: !Window,
+   *   element: !Element,
    *   scrollContainer: !Element,
    *   advanceable: !AdvanceDef
    * }} config
    */
-  constructor({win, scrollContainer, advanceable}) {
+  constructor(config) {
+    const {advanceable, element, scrollContainer, win} = config;
     /** @private @const */
     this.win_ = win;
 
@@ -79,6 +68,9 @@ export class AutoAdvance {
     /** @private {number} */
     this.maxAdvances_ = Number.POSITIVE_INFINITY;
 
+    /** @private {!../../../src/service/ampdoc-impl.AmpDoc} */
+    this.ampdoc_ = element.getAmpDoc();
+
     this.createDebouncedAdvance_(this.autoAdvanceInterval_);
     this.scrollContainer_.addEventListener(
       'scroll',
@@ -91,6 +83,9 @@ export class AutoAdvance {
       () => this.handleTouchStart_(),
       {capture: true, passive: true}
     );
+    listen(element, CarouselEvents.INDEX_CHANGE, (event) => {
+      this.handleIndexChange_(event);
+    });
   }
 
   /**
@@ -171,11 +166,18 @@ export class AutoAdvance {
    * @private
    */
   createDebouncedAdvance_(interval) {
-    this.debouncedAdvance_ = debounce(
+    const debouncedAdvance = debounce(
       this.win_,
-      () => this.advance_(),
+      () => {
+        if (debouncedAdvance != this.debouncedAdvance_) {
+          return;
+        }
+
+        this.advance_();
+      },
       interval
     );
+    this.debouncedAdvance_ = debouncedAdvance;
   }
 
   /**
@@ -201,6 +203,7 @@ export class AutoAdvance {
   shouldAutoAdvance_() {
     return (
       this.autoAdvance_ &&
+      this.ampdoc_.isVisible() &&
       !this.paused_ &&
       !this.stopped_ &&
       this.advances_ < this.maxAdvances_
@@ -212,6 +215,18 @@ export class AutoAdvance {
    */
   handleScroll_() {
     this.resetAutoAdvance_();
+  }
+
+  /**
+   * @param {!Event} event
+   */
+  handleIndexChange_(event) {
+    const detail = getDetail(event);
+    const actionSource = detail['actionSource'];
+
+    if (actionSource && actionSource !== ActionSource.AUTOPLAY) {
+      this.stop();
+    }
   }
 
   /**

@@ -1,35 +1,19 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
 
-import {FakeMutationObserver} from '../../testing/fake-dom';
-import {Services} from '../../src/services';
+import {FakeMutationObserver} from '#testing/fake-dom';
 
 describes.fakeWin(
   'HiddenObserver',
   {
     amp: true,
   },
-  env => {
+  (env) => {
     let hiddenObserver;
-    let sandbox;
     let MutationObserver;
 
     function setupSingletonMutationObserver(opt_cb = () => {}) {
       const mo = new FakeMutationObserver(opt_cb);
-      MutationObserver = sandbox.stub().callsFake(function() {
+      MutationObserver = env.sandbox.stub().callsFake(function () {
         return mo;
       });
       env.win.MutationObserver = MutationObserver;
@@ -37,7 +21,6 @@ describes.fakeWin(
     }
 
     beforeEach(() => {
-      sandbox = env.sandbox;
       hiddenObserver = Services.hiddenObserverForDoc(
         env.win.document.documentElement
       );
@@ -45,7 +28,7 @@ describes.fakeWin(
 
     it('initializes mutation observer on first listen', () => {
       const mo = setupSingletonMutationObserver();
-      const observe = sandbox.spy(mo, 'observe');
+      const observe = env.sandbox.spy(mo, 'observe');
 
       hiddenObserver.add(() => {});
 
@@ -55,7 +38,7 @@ describes.fakeWin(
 
     it('keeps mutation observer on second listen', () => {
       const mo = setupSingletonMutationObserver();
-      const observe = sandbox.spy(mo, 'observe');
+      const observe = env.sandbox.spy(mo, 'observe');
 
       hiddenObserver.add(() => {});
       hiddenObserver.add(() => {});
@@ -66,7 +49,7 @@ describes.fakeWin(
 
     it('frees mutation observer after last unlisten', () => {
       const mo = setupSingletonMutationObserver();
-      const disconnect = sandbox.spy(mo, 'disconnect');
+      const disconnect = env.sandbox.spy(mo, 'disconnect');
 
       const unlisten = hiddenObserver.add(() => {});
       unlisten();
@@ -76,7 +59,7 @@ describes.fakeWin(
 
     it('keeps mutation observer after second-to-last unlisten', () => {
       const mo = setupSingletonMutationObserver();
-      const disconnect = sandbox.spy(mo, 'disconnect');
+      const disconnect = env.sandbox.spy(mo, 'disconnect');
 
       const unlisten = hiddenObserver.add(() => {});
       const unlisten2 = hiddenObserver.add(() => {});
@@ -88,8 +71,8 @@ describes.fakeWin(
       expect(disconnect).to.have.been.calledOnce;
     });
 
-    it('passes MutationRecords to handler', function*() {
-      const stub = sandbox.stub();
+    it('passes MutationRecords to handler', function* () {
+      const stub = env.sandbox.stub();
       const mo = setupSingletonMutationObserver(stub);
 
       const mutation = {};

@@ -1,29 +1,15 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
 
-import * as eventHelper from '../../../../src/event-helper';
+import * as eventHelper from '#utils/event-helper';
+
+import {CSS} from '../../../../build/amp-form-0.1.css';
+import {installStylesForDoc} from '../../../../src/style-installer';
 import {
   AmpFormTextarea,
   getHasOverflow,
   handleInitialOverflowElements,
   maybeResizeTextarea,
 } from '../amp-form-textarea';
-import {CSS} from '../../../../build/amp-form-0.1.css';
-import {Services} from '../../../../src/services';
-import {installStylesForDoc} from '../../../../src/style-installer';
 
 describes.realWin(
   'amp-form textarea[autoexpand]',
@@ -32,13 +18,11 @@ describes.realWin(
       ampdoc: 'single',
     },
   },
-  env => {
+  (env) => {
     let doc;
-    let sandbox;
     beforeEach(() => {
       doc = env.ampdoc.getRootNode();
       installStylesForDoc(env.ampdoc, CSS, () => {}, false, 'amp-form');
-      sandbox = env.sandbox;
     });
 
     describe('handleInitialOverflowElements', () => {
@@ -89,13 +73,13 @@ describes.realWin(
         textarea.innerHTML = 'small text';
         doc.body.appendChild(textarea);
 
-        const fakeResources = {
+        const fakeMutator = {
           measureMutateElement(unusedElement, measurer, mutator) {
             measurer();
             return mutator() || Promise.resolve();
           },
         };
-        sandbox.stub(Services, 'resourcesForDoc').returns(fakeResources);
+        env.sandbox.stub(Services, 'mutatorForDoc').returns(fakeMutator);
 
         const initialHeight = textarea.clientHeight;
         return maybeResizeTextarea(textarea).then(() => {
@@ -111,13 +95,13 @@ describes.realWin(
         textarea.innerHTML = 'big text'.repeat(100);
         doc.body.appendChild(textarea);
 
-        const fakeResources = {
+        const fakeMutator = {
           measureMutateElement(unusedElement, measurer, mutator) {
             measurer();
             return mutator() || Promise.resolve();
           },
         };
-        sandbox.stub(Services, 'resourcesForDoc').returns(fakeResources);
+        env.sandbox.stub(Services, 'mutatorForDoc').returns(fakeMutator);
 
         const initialHeight = textarea.clientHeight;
         return maybeResizeTextarea(textarea).then(() => {
@@ -133,13 +117,13 @@ describes.realWin(
         textarea.innerHTML = 'big text'.repeat(100);
         doc.body.appendChild(textarea);
 
-        const fakeResources = {
+        const fakeMutator = {
           measureMutateElement(unusedElement, measurer, mutator) {
             measurer();
             return mutator() || Promise.resolve();
           },
         };
-        sandbox.stub(Services, 'resourcesForDoc').returns(fakeResources);
+        env.sandbox.stub(Services, 'mutatorForDoc').returns(fakeMutator);
 
         const initialHeight = textarea.clientHeight;
         let increasedHeight;
@@ -159,7 +143,7 @@ describes.realWin(
     });
 
     describe('handleTextareaDrag', () => {
-      it('should handle text area drag', done => {
+      it('should handle text area drag', (done) => {
         const textarea = doc.createElement('textarea');
         textarea.setAttribute('autoexpand', '');
         textarea.setAttribute('rows', '4');
@@ -178,8 +162,8 @@ describes.realWin(
             return mutator() || Promise.resolve();
           },
         };
-        sandbox.stub(Services, 'resourcesForDoc').returns(fakeResources);
-        sandbox
+        env.sandbox.stub(Services, 'resourcesForDoc').returns(fakeResources);
+        env.sandbox
           .stub(eventHelper, 'listenOncePromise')
           .returns(Promise.resolve());
 
@@ -190,7 +174,9 @@ describes.realWin(
           mouseDownEvent = doc.createEventObject();
           mouseDownEvent.type = 'mousedown';
         }
-        sandbox.defineProperty(mouseDownEvent, 'target', {value: textarea});
+        env.sandbox.defineProperty(mouseDownEvent, 'target', {
+          value: textarea,
+        });
         // Given 2 mousedown events on the textarea.
         doc.dispatchEvent(mouseDownEvent);
         doc.dispatchEvent(mouseDownEvent);

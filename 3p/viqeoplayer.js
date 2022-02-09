@@ -1,21 +1,9 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {getData} from '../src/event-helper';
+import {tryPlay} from '#core/dom/video';
+import {tryDecodeUriComponent} from '#core/types/string/url';
+
+import {getData} from '#utils/event-helper';
+
 import {loadScript} from './3p';
-import {tryDecodeUriComponent} from '../src/url';
 
 /**
  * @param {Window} global
@@ -27,9 +15,16 @@ function viqeoPlayerInitLoaded(global, VIQEO) {
   const data = getData(global.context);
   let viqeoPlayerInstance;
   VIQEO['setConfig']({url: sourceUrl, amp: {pageViewId, canonicalUrl}});
-  VIQEO['subscribeTracking'](params => {
+  VIQEO['subscribeTracking']((params) => {
     viqeoPlayerInstance = params['player'];
   }, 'Player:added');
+  VIQEO['subscribeTracking'](() => {
+    sendMessage('updatePlayedRanges', viqeoPlayerInstance['getPlayedRanges']());
+    sendMessage('updateCurrentTime', viqeoPlayerInstance['getCurrentTime']());
+  }, 'Player:currentTimeUpdated');
+  VIQEO['subscribeTracking'](() => {
+    sendMessage('updateDuration', viqeoPlayerInstance['getDuration']());
+  }, 'Player:durationUpdated');
   VIQEO['createPlayer']({
     videoId: data['videoid'],
     profileId: data['profileid'],
@@ -38,16 +33,16 @@ function viqeoPlayerInitLoaded(global, VIQEO) {
 
   global.addEventListener('message', parseMessage, false);
 
-  subscribe('videoLoaded', 'ready');
-  subscribe('previewLoaded', 'ready');
-  subscribe('started', 'started');
+  subscribe('ready', 'ready');
   subscribe('paused', 'pause');
+  subscribe('started', 'play');
   subscribe('played', 'play');
   subscribe('replayed', 'play');
-  subscribeTracking({
-    Mute: 'mute',
-    Unmute: 'unmute',
-  });
+  subscribe('ended', 'end');
+  subscribe('advStarted', 'startAdvert');
+  subscribe('advEnded', 'endAdvert');
+  subscribe('muted', 'mute');
+  subscribe('unmuted', 'unmute');
 
   /**
    * Subscribe on viqeo's events
@@ -59,22 +54,6 @@ function viqeoPlayerInitLoaded(global, VIQEO) {
     VIQEO['subscribeTracking'](() => {
       sendMessage(targetEventName);
     }, `Player:${playerEventName}`);
-  }
-
-  /**
-   * Subscribe viqeo's tracking
-   * @param {Object.<string, string>} eventsDescription
-   * @private
-   */
-  function subscribeTracking(eventsDescription) {
-    VIQEO['subscribeTracking'](params => {
-      const name =
-        params && params['trackingParams'] && params['trackingParams'].name;
-      const targetEventName = eventsDescription[name];
-      if (targetEventName) {
-        sendMessage(targetEventName);
-      }
-    }, 'Player:userAction');
   }
 
   const sendMessage = (eventName, value = null) => {
@@ -98,7 +77,7 @@ function viqeoPlayerInitLoaded(global, VIQEO) {
       return;
     }
     if (action === 'play') {
-      viqeoPlayerInstance.play();
+      tryPlay(viqeoPlayerInstance);
     } else if (action === 'pause') {
       viqeoPlayerInstance.pause();
     } else if (action === 'stop') {
@@ -126,6 +105,6 @@ export function viqeoplayer(global) {
       ? 'https://cdn.viqeo.tv/js/vq_starter.js'
       : 'https://static.viqeo.tv/js/vq_player_init.js?branch=dev1');
 
-  global['onViqeoLoad'] = VIQEO => viqeoPlayerInitLoaded(global, VIQEO);
+  global['onViqeoLoad'] = (VIQEO) => viqeoPlayerInitLoaded(global, VIQEO);
   loadScript(global, scriptPlayerInit);
 }

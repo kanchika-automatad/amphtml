@@ -1,33 +1,14 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
+import {extensionScriptsInNode} from '#service/extension-script';
+
+import {userAssert} from '#utils/log';
 
 import {Poller} from './poller';
-import {Services} from '../../../src/services';
-import {addParamsToUrl} from '../../../src/url';
-import {dict} from '../../../src/utils/object';
+
 import {fetchDocument} from '../../../src/document-fetcher';
 import {getMode} from '../../../src/mode';
-import {getServicePromiseForDoc} from '../../../src/service';
-import {
-  installOriginExperimentsForDoc,
-  originExperimentsForDoc,
-} from '../../../src/service/origin-experiments-impl';
-import {startsWith} from '../../../src/string';
-import {toArray} from '../../../src/types';
-import {userAssert} from '../../../src/log';
+import {getServicePromiseForDoc} from '../../../src/service-helpers';
+import {addParamToUrl} from '../../../src/url';
 
 /** @const {string} */
 export const SERVICE_ID = 'liveListManager';
@@ -82,16 +63,13 @@ export class LiveListManager {
     /** @private @const {boolean} */
     this.isTransformed_ = isDocTransformed(ampdoc.getRootNode());
 
-    /** @private {?boolean} */
-    this.enrolledInAppendRandomExperiment_ = null;
-
     // Only start polling when doc is ready and when the doc is visible.
     this.whenDocReady_().then(() => {
       // Switch out the poller interval if we can find a lower one and
       // then make sure to stop polling if doc is not visible.
       this.interval_ = Math.min.apply(Math, this.intervals_);
 
-      const initialUpdateTimes = Object.keys(this.liveLists_).map(key =>
+      const initialUpdateTimes = Object.keys(this.liveLists_).map((key) =>
         this.liveLists_[key].getUpdateTime()
       );
       this.latestUpdateTime_ = Math.max.apply(Math, initialUpdateTimes);
@@ -129,10 +107,9 @@ export class LiveListManager {
    * @return {!Promise<!LiveListManager>}
    */
   static forDoc(element) {
-    return /** @type {!Promise<!LiveListManager>} */ (getServicePromiseForDoc(
-      element,
-      SERVICE_ID
-    ));
+    return /** @type {!Promise<!LiveListManager>} */ (
+      getServicePromiseForDoc(element, SERVICE_ID)
+    );
   }
 
   /**
@@ -142,7 +119,7 @@ export class LiveListManager {
    * @private
    */
   hasActiveLiveLists_() {
-    return Object.keys(this.liveLists_).some(key => {
+    return Object.keys(this.liveLists_).some((key) => {
       return this.liveLists_[key].isEnabled();
     });
   }
@@ -155,17 +132,11 @@ export class LiveListManager {
   fetchDocument_() {
     let url = this.url_;
     if (this.latestUpdateTime_ > 0) {
-      const parameters = this.enrolledInAppendRandomExperiment_
-        ? dict({
-            'amp_latest_update_time': String(this.latestUpdateTime_),
-            // AMP Caches do not always evict entries from their caches.
-            // This experiment adds a random identifier to reduce cache hits for enrolled documents.
-            'amp_random': String(Math.random()),
-          })
-        : dict({
-            'amp_latest_update_time': String(this.latestUpdateTime_),
-          });
-      url = addParamsToUrl(url, parameters);
+      url = addParamToUrl(
+        url,
+        'amp_latest_update_time',
+        String(this.latestUpdateTime_)
+      );
     }
 
     if (this.isTransformed_) {
@@ -227,14 +198,13 @@ export class LiveListManager {
    * @private
    */
   getCustomSlots_(doc) {
-    const liveListsWithCustomSlots = Object.keys(this.liveLists_).filter(id =>
+    const liveListsWithCustomSlots = Object.keys(this.liveLists_).filter((id) =>
       this.liveLists_[id].hasCustomSlot()
     );
 
-    return liveListsWithCustomSlots.map(id => {
-      const customSlotId = this.liveLists_[id].element[
-        AMP_LIVE_LIST_CUSTOM_SLOT_ID
-      ];
+    return liveListsWithCustomSlots.map((id) => {
+      const customSlotId =
+        this.liveLists_[id].element[AMP_LIVE_LIST_CUSTOM_SLOT_ID];
       return doc.getElementById(customSlotId);
     });
   }
@@ -293,17 +263,6 @@ export class LiveListManager {
     // Polling may not be started yet if no live lists were registered by
     // doc ready in LiveListManager's constructor.
     if (liveList.isEnabled() && this.poller_ && this.ampdoc.isVisible()) {
-      if (this.enrolledInAppendRandomExperiment_ === null) {
-        // Origin Trial for cache busting requests for `amp-live-list`.
-        installOriginExperimentsForDoc(this.ampdoc);
-        originExperimentsForDoc(liveList.element)
-          .getExperiments()
-          .then(
-            trials =>
-              (this.enrolledInAppendRandomExperiment_ =
-                trials && trials.includes('amp-live-list-random'))
-          );
-      }
       this.poller_.start();
     }
   }
@@ -324,7 +283,7 @@ export class LiveListManager {
   setupVisibilityHandler_() {
     // Polling should always be stopped when document is no longer visible.
     this.ampdoc.onVisibilityChanged(() => {
-      if (this.ampdoc.isVisible()) {
+      if (this.ampdoc.isVisible() && this.hasActiveLiveLists_()) {
         // We use immediate so that the user starts getting updates
         // right away when they've switched back to the page.
         this.poller_.start(/** immediate */ true);
@@ -338,16 +297,15 @@ export class LiveListManager {
    * @param {!Document} doc
    */
   installExtensionsForDoc_(doc) {
-    const extensions = toArray(
-      doc.querySelectorAll('script[custom-element], script[custom-template]')
-    );
-    extensions.forEach(script => {
-      const extensionName =
-        script.getAttribute('custom-element') ||
-        script.getAttribute('custom-template');
+    const extensions = extensionScriptsInNode(doc);
+    extensions.forEach(({extensionId, extensionVersion}) => {
       // This is a cheap operation if extension is already installed so no need
       // to over optimize checks.
-      this.extensions_.installExtensionForDoc(this.ampdoc, extensionName);
+      this.extensions_.installExtensionForDoc(
+        this.ampdoc,
+        extensionId,
+        extensionVersion
+      );
     });
   }
 
@@ -383,5 +341,5 @@ function isDocTransformed(root) {
   }
   const {documentElement} = root.ownerDocument;
   const transformed = documentElement.getAttribute('transformed');
-  return Boolean(transformed) && startsWith(transformed, TRANSFORMED_PREFIX);
+  return Boolean(transformed) && transformed.startsWith(TRANSFORMED_PREFIX);
 }

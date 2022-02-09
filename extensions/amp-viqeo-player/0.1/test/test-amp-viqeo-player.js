@@ -1,21 +1,11 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
 
-import {PlayingStates} from '../../../../src/video-interface';
-import {Services} from '../../../../src/services';
+import {listenOncePromise} from '#utils/event-helper';
+
+import {
+  PlayingStates_Enum,
+  VideoEvents_Enum,
+} from '../../../../src/video-interface';
 import AmpViqeoPlayer from '../amp-viqeo-player';
 
 describes.realWin(
@@ -26,7 +16,7 @@ describes.realWin(
     },
     allowExternalResources: true,
   },
-  function(env) {
+  function (env) {
     this.timeout(4000);
     let win, doc;
 
@@ -35,9 +25,17 @@ describes.realWin(
       doc = win.document;
     });
 
+    async function fakePostMessage(viqeoElement, info) {
+      const impl = await viqeoElement.getImpl(false);
+      impl.handleViqeoMessages_({
+        source: viqeoElement.querySelector('iframe').contentWindow,
+        data: {source: 'ViqeoPlayer', ...info},
+      });
+    }
+
     it.skip('test-get-data', () => {
-      return getViqeo().then(p => {
-        const {viqeoElement, entry, viqeo} = p;
+      return getViqeo().then((p) => {
+        const {entry, viqeo, viqeoElement} = p;
         expect(entry.video.element).to.equal(viqeoElement);
         expect(entry.video instanceof AmpViqeoPlayer).to.equal(true);
         expect(entry.video).to.equal(viqeo);
@@ -65,7 +63,7 @@ describes.realWin(
 
     describe.skip('test-playing-actions', () => {
       it('renders responsively', () => {
-        return getViqeo().then(p => {
+        return getViqeo().then((p) => {
           const iframe = p.viqeoElement.querySelector('iframe');
           expect(iframe).to.not.be.null;
           expect(iframe.className).to.match(/i-amphtml-fill-content/);
@@ -73,7 +71,7 @@ describes.realWin(
       });
 
       it('should propagate autoplay to ad iframe', () => {
-        return getViqeo({opt_params: {autoplay: ''}}).then(p => {
+        return getViqeo({opt_params: {autoplay: ''}}).then((p) => {
           const iframe = p.viqeoElement.querySelector('iframe');
           const data = JSON.parse(iframe.name).attributes;
           expect(data).to.be.ok;
@@ -86,7 +84,7 @@ describes.realWin(
         'should propagate autoplay=false ' +
           'if element has not autoplay attribute to ad iframe',
         () => {
-          return getViqeo().then(p => {
+          return getViqeo().then((p) => {
             const iframe = p.viqeoElement.querySelector('iframe');
             const data = JSON.parse(iframe.name).attributes;
             expect(data).to.be.ok;
@@ -97,48 +95,89 @@ describes.realWin(
       );
 
       it('should paused without autoplay', () => {
-        return getViqeo().then(p => {
+        return getViqeo().then((p) => {
           const curState = p.videoManager.getPlayingState(p.viqeo);
-          return expect(curState).to.equal(PlayingStates.PAUSED);
+          return expect(curState).to.equal(PlayingStates_Enum.PAUSED);
         });
       });
     });
 
     describe('createPlaceholderCallback', () => {
       it('should create a placeholder image', () => {
-        return getViqeo().then(p => {
-          const img = p.viqeoElement.querySelector('amp-img');
+        return getViqeo().then((p) => {
+          const img = p.viqeoElement.querySelector('img');
           expect(img).to.not.be.null;
+          expect(img.getAttribute('loading')).to.equal('lazy');
           expect(img.getAttribute('src')).to.equal(
             'https://cdn.viqeo.tv/preview/922d04f30b66f1a32eb2.jpg'
           );
-          expect(img.getAttribute('layout')).to.equal('fill');
-          expect(img.hasAttribute('placeholder')).to.be.true;
+          expect(img).to.have.class('i-amphtml-fill-content');
+          expect(img).to.have.attribute('placeholder');
           expect(img.getAttribute('referrerpolicy')).to.equal('origin');
           expect(img.getAttribute('alt')).to.equal('Loading video');
         });
       });
     });
 
+    it('should forward events', () => {
+      return getViqeo().then(({viqeoElement}) => {
+        return Promise.resolve()
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.LOAD);
+            await fakePostMessage(viqeoElement, {action: 'ready'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.PLAYING);
+            await fakePostMessage(viqeoElement, {action: 'play'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.PAUSE);
+            await fakePostMessage(viqeoElement, {action: 'pause'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.MUTED);
+            await fakePostMessage(viqeoElement, {action: 'mute'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.UNMUTED);
+            await fakePostMessage(viqeoElement, {action: 'unmute'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.ENDED);
+            await fakePostMessage(viqeoElement, {action: 'end'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(
+              viqeoElement,
+              VideoEvents_Enum.AD_START
+            );
+            await fakePostMessage(viqeoElement, {action: 'startAdvert'});
+            return p;
+          })
+          .then(async () => {
+            const p = listenOncePromise(viqeoElement, VideoEvents_Enum.AD_END);
+            await fakePostMessage(viqeoElement, {action: 'endAdvert'});
+            return p;
+          });
+      });
+    });
+
     function getViqeo(params) {
-      const {
-        id,
-        viqeoProfileId,
-        viqeoId,
-        width,
-        height,
-        opt_params,
-      } = Object.assign(
-        {
-          id: 'myVideo',
-          viqeoProfileId: 184,
-          viqeoId: '922d04f30b66f1a32eb2',
-          width: 320,
-          height: 180,
-          opt_params: {},
-        },
-        params
-      );
+      const {height, id, opt_params, viqeoId, viqeoProfileId, width} = {
+        id: 'myVideo',
+        viqeoProfileId: 184,
+        viqeoId: '922d04f30b66f1a32eb2',
+        width: 320,
+        height: 180,
+        opt_params: {},
+        ...params,
+      };
 
       const viqeoElement = doc.createElement('amp-viqeo-player');
 
@@ -152,19 +191,17 @@ describes.realWin(
       height && viqeoElement.setAttribute('height', height);
 
       opt_params &&
-        Object.keys(opt_params).forEach(key => {
+        Object.keys(opt_params).forEach((key) => {
           viqeoElement.setAttribute(key, opt_params[key]);
         });
 
       doc.body.appendChild(viqeoElement);
       return viqeoElement
-        .build()
-        .then(() => {
-          viqeoElement.layoutCallback.bind(viqeoElement);
-        })
+        .buildInternal()
+        .then(() => viqeoElement.layoutCallback())
         .then(() => {
           const videoManager = Services.videoManagerForDoc(doc);
-          const entry = videoManager.getEntryForElement_(viqeoElement);
+          const entry = videoManager.getEntry_(viqeoElement);
           return Promise.resolve({
             viqeoElement,
             videoManager,

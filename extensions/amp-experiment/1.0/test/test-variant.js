@@ -1,24 +1,11 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
+import {AmpDocSingle} from '#service/ampdoc-impl';
 
-import {AmpDocSingle} from '../../../../src/service/ampdoc-impl';
-import {Services} from '../../../../src/services';
+import {FakePerformance} from '#testing/fake-dom';
+
 import {allocateVariant} from '../variant';
 
-describes.sandboxed('allocateVariant', {}, env => {
+describes.sandboxed('allocateVariant', {}, (env) => {
   let fakeHead;
   let fakeWin;
   let ampdoc;
@@ -29,8 +16,6 @@ describes.sandboxed('allocateVariant', {}, env => {
   let getNotificationStub;
 
   beforeEach(() => {
-    const {sandbox} = env;
-
     fakeWin = {
       Math: {
         random: () => {
@@ -41,14 +26,15 @@ describes.sandboxed('allocateVariant', {}, env => {
         nodeType: /* DOCUMENT */ 9,
         body: {},
       },
+      performance: new FakePerformance(window),
     };
     fakeWin.document.defaultView = fakeWin;
     ampdoc = new AmpDocSingle(fakeWin);
 
     fakeHead = {};
 
-    getCidStub = sandbox.stub();
-    sandbox
+    getCidStub = env.sandbox.stub();
+    env.sandbox
       .stub(Services, 'cidForDoc')
       .withArgs(ampdoc)
       .returns(
@@ -57,16 +43,13 @@ describes.sandboxed('allocateVariant', {}, env => {
         })
       );
 
-    uniformStub = sandbox.stub();
-    sandbox
-      .stub(Services, 'cryptoFor')
-      .withArgs(fakeWin)
-      .returns({
-        uniform: uniformStub,
-      });
+    uniformStub = env.sandbox.stub();
+    env.sandbox.stub(Services, 'cryptoFor').withArgs(fakeWin).returns({
+      uniform: uniformStub,
+    });
 
-    getNotificationStub = sandbox.stub();
-    sandbox
+    getNotificationStub = env.sandbox.stub();
+    env.sandbox
       .stub(Services, 'userNotificationManagerForDoc')
       .withArgs(fakeHead)
       .returns(
@@ -77,8 +60,8 @@ describes.sandboxed('allocateVariant', {}, env => {
 
     fakeViewer = {};
 
-    sandbox.stub(ampdoc, 'getHeadNode').returns(fakeHead);
-    getParamStub = sandbox.stub(ampdoc, 'getParam').returns('true');
+    env.sandbox.stub(ampdoc, 'getHeadNode').returns(fakeHead);
+    getParamStub = env.sandbox.stub(ampdoc, 'getParam').returns('true');
   });
 
   it('should throw for invalid config', () => {

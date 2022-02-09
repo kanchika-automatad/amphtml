@@ -1,33 +1,19 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {VisibilityState_Enum} from '#core/constants/visibility-state';
+import {removeElement} from '#core/dom';
+import {layoutRectLtwh} from '#core/dom/layout/rect';
+import {setStyle, toggle} from '#core/dom/style';
+
+import {Services} from '#service';
+import {installPositionObserverServiceForDoc} from '#service/position-observer/position-observer-impl';
+import {PositionObserverFidelity_Enum} from '#service/position-observer/position-observer-worker';
+
+import {triggerAnalyticsEvent} from '#utils/analytics';
+import {dev, devAssert, user, userAssert} from '#utils/log';
 
 import {CSS} from '../../../build/amp-next-page-0.1.css';
-import {MultidocManager} from '../../../src/runtime';
-import {PositionObserverFidelity} from '../../../src/service/position-observer/position-observer-worker';
-import {Services} from '../../../src/services';
-import {VisibilityState} from '../../../src/visibility-state';
-import {dev, devAssert, user, userAssert} from '../../../src/log';
-import {dict} from '../../../src/utils/object';
-import {getAmpdoc} from '../../../src/service';
-import {installPositionObserverServiceForDoc} from '../../../src/service/position-observer/position-observer-impl';
+import {MultidocManager} from '../../../src/multidoc-manager';
+import {getAmpdoc} from '../../../src/service-helpers';
 import {installStylesForDoc} from '../../../src/style-installer';
-import {layoutRectLtwh} from '../../../src/layout-rect';
-import {removeElement} from '../../../src/dom';
-import {setStyle, toggle} from '../../../src/style';
-import {triggerAnalyticsEvent} from '../../../src/analytics';
 
 // TODO(emarchiori): Make this a configurable parameter.
 const SEPARATOR_RECOS = 3;
@@ -76,8 +62,8 @@ export class NextPageService {
     /** @private {?Element} */
     this.separator_ = null;
 
-    /** @private {?../../../src/service/resources-interface.ResourcesInterface} */
-    this.resources_ = null;
+    /** @private {?../../../src/service/mutator-interface.MutatorInterface} */
+    this.mutator_ = null;
 
     /** @private {?MultidocManager} */
     this.multidocManager_ = null;
@@ -154,7 +140,7 @@ export class NextPageService {
 
     this.navigation_ = Services.navigationForDoc(ampDoc);
     this.viewport_ = Services.viewportForDoc(ampDoc);
-    this.resources_ = Services.resourcesForDoc(ampDoc);
+    this.mutator_ = Services.mutatorForDoc(ampDoc);
     this.multidocManager_ = new MultidocManager(
       win,
       Services.ampdocServiceFor(win),
@@ -230,7 +216,7 @@ export class NextPageService {
 
     /** @type {!../../../src/runtime.ShadowDoc} */
     const amp = this.multidocManager_.attachShadowDoc(shadowRoot, doc, '', {
-      visibilityState: VisibilityState.PRERENDER,
+      visibilityState: VisibilityState_Enum.PRERENDER,
     });
     const ampdoc = devAssert(amp.ampdoc);
     installStylesForDoc(ampdoc, CSS, null, false, TAG);
@@ -239,6 +225,16 @@ export class NextPageService {
     body.classList.add('i-amphtml-next-page-document');
 
     return amp;
+  }
+
+  /**
+   * Creates an invisible element used to measure the position of the documents
+   * @return {!Element}
+   */
+  createMeasurer_() {
+    const measurer = this.win_.document.createElement('div');
+    measurer.classList.add('i-amphtml-next-page-measurer');
+    return measurer;
   }
 
   /**
@@ -262,6 +258,9 @@ export class NextPageService {
 
       const container = this.win_.document.createElement('div');
 
+      const measurer = this.createMeasurer_();
+      container.appendChild(measurer);
+
       const separator = this.separator_.cloneNode(true);
       separator.removeAttribute('separator');
       container.appendChild(separator);
@@ -276,14 +275,14 @@ export class NextPageService {
       const page = this.nextArticle_;
       this.appendPageHandler_(container).then(() => {
         this.positionObserver_.observe(
-          separator,
-          PositionObserverFidelity.LOW,
-          position => this.positionUpdate_(page, position)
+          measurer,
+          PositionObserverFidelity_Enum.LOW,
+          (position) => this.positionUpdate_(page, position)
         );
         this.positionObserver_.observe(
           articleLinks,
-          PositionObserverFidelity.LOW,
-          unused => this.articleLinksPositionUpdate_(documentRef)
+          PositionObserverFidelity_Enum.LOW,
+          (unused) => this.articleLinksPositionUpdate_(documentRef)
         );
       });
 
@@ -296,7 +295,7 @@ export class NextPageService {
       this.nextArticle_++;
       this.xhr_
         .fetch(next.ampUrl, {ampCors: false})
-        .then(response => {
+        .then((response) => {
           // Update AMP URL in case we were redirected.
           documentRef.ampUrl = response.url;
           const url = this.urlService_.parse(response.url);
@@ -307,7 +306,7 @@ export class NextPageService {
           );
           return response.text();
         })
-        .then(html => {
+        .then((html) => {
           const doc = this.win_.document.implementation.createHTMLDocument('');
           doc.open();
           doc.write(html);
@@ -315,7 +314,7 @@ export class NextPageService {
           return doc;
         })
         .then(
-          doc =>
+          (doc) =>
             new Promise((resolve, reject) => {
               if (documentRef.cancelled) {
                 // User has reached the end of the document already, don't render.
@@ -327,7 +326,7 @@ export class NextPageService {
                 this.positionObserver_.unobserve(articleLinks);
                 documentRef.recUnit.isObserving = true;
               }
-              this.resources_.mutateElement(container, () => {
+              this.mutator_.mutateElement(container, () => {
                 try {
                   documentRef.amp = this.attachShadowDoc_(shadowRoot, doc);
 
@@ -339,9 +338,9 @@ export class NextPageService {
                 }
               });
             }),
-          e => user().error(TAG, 'failed to fetch %s', next.ampUrl, e)
+          (e) => user().error(TAG, 'failed to fetch %s', next.ampUrl, e)
         )
-        .catch(e =>
+        .catch((e) =>
           dev().error(
             TAG,
             'failed to attach shadow document for %s',
@@ -386,7 +385,7 @@ export class NextPageService {
         'i-amphtml-reco-holder-article',
         'amp-next-page-link'
       );
-      articleHolder.addEventListener('click', e => {
+      articleHolder.addEventListener('click', (e) => {
         this.triggerAnalyticsEvent_(
           'amp-next-page-click',
           next.ampUrl,
@@ -445,7 +444,7 @@ export class NextPageService {
     );
     this.viewport_
       .getClientRectAsync(dev().assertElement(this.element_))
-      .then(elementBox => {
+      .then((elementBox) => {
         if (this.documentQueued_) {
           return;
         }
@@ -521,7 +520,7 @@ export class NextPageService {
    * @private
    */
   setActiveDocument_(ref) {
-    this.documentRefs_.forEach(docRef => {
+    this.documentRefs_.forEach((docRef) => {
       const {amp} = docRef;
       // Update the title and history
       if (docRef === ref) {
@@ -529,10 +528,10 @@ export class NextPageService {
         this.activeDocumentRef_ = docRef;
         this.setActiveDocumentInHistory_(docRef);
         // Show the active document
-        this.setDocumentVisibility_(docRef, VisibilityState.VISIBLE);
+        this.setDocumentVisibility_(docRef, VisibilityState_Enum.VISIBLE);
       } else {
         // Hide other documents
-        this.setDocumentVisibility_(docRef, VisibilityState.HIDDEN);
+        this.setDocumentVisibility_(docRef, VisibilityState_Enum.HIDDEN);
       }
     });
 
@@ -543,7 +542,7 @@ export class NextPageService {
    * Manually overrides the document's visible state to the given state
    *
    * @param {!DocumentRef} ref Reference to the document to change
-   * @param {!../../../src/visibility-state.VisibilityState} visibilityState
+   * @param {!../../../src/core/constants/visibility-state.VisibilityState_Enum} visibilityState
    * @private
    */
   setDocumentVisibility_(ref, visibilityState) {
@@ -560,7 +559,10 @@ export class NextPageService {
     }
 
     // Prevent hiding of documents that are being pre-rendered
-    if (!ampDoc.hasBeenVisible() && visibilityState == VisibilityState.HIDDEN) {
+    if (
+      !ampDoc.hasBeenVisible() &&
+      visibilityState == VisibilityState_Enum.HIDDEN
+    ) {
       return;
     }
 
@@ -572,7 +574,7 @@ export class NextPageService {
    * @private
    */
   setActiveDocumentInHistory_(documentRef) {
-    const {title, canonicalUrl} = documentRef.amp;
+    const {canonicalUrl, title} = documentRef.amp;
     const {pathname, search} = this.urlService_.parse(documentRef.ampUrl);
     this.history_.replace({title, url: pathname + search, canonicalUrl});
   }
@@ -586,10 +588,10 @@ export class NextPageService {
   triggerAnalyticsEvent_(eventType, toURL, fromURL) {
     fromURL = fromURL || '';
 
-    const vars = dict({
+    const vars = {
       'toURL': toURL,
       'fromURL': fromURL,
-    });
+    };
     triggerAnalyticsEvent(dev().assertElement(this.element_), eventType, vars);
   }
 }

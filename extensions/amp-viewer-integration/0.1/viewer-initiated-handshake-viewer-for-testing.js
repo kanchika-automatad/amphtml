@@ -1,23 +1,8 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {parseUrlDeprecated, serializeQueryString} from '../../../src/url';
 
 const APP = '__AMPHTML__';
-const MessageType = {
+/** @enum {string} */
+const MessageType_Enum = {
   REQUEST: 'q',
   RESPONSE: 's',
 };
@@ -42,9 +27,6 @@ export class WebviewViewerForTesting {
     this.alreadyLoaded_ = false;
 
     /** @private {string} */
-    this.viewportType_ = 'natural';
-
-    /** @private {string} */
     this.visibilityState_ = visible ? 'visible' : 'hidden';
 
     /** @type {Element} */
@@ -56,19 +38,13 @@ export class WebviewViewerForTesting {
     /** @type {Element} */
     this.iframe = document.createElement('iframe');
     this.iframe.setAttribute('id', 'AMP_DOC_' + id);
-
-    const isIos_ = /iPhone|iPad|iPod/i.test(window.navigator.userAgent);
-    if (this.viewportType_ == 'natural' && !isIos_) {
-      this.iframe.setAttribute('scrolling', 'yes');
-    } else {
-      this.iframe.setAttribute('scrolling', 'no');
-    }
+    this.iframe.setAttribute('scrolling', 'yes');
 
     this.pollingIntervalIds_ = [];
     this.intervalCtr = 0;
 
     /** @private @const {!Promise} */
-    this.handshakeReceivedPromise_ = new Promise(resolve => {
+    this.handshakeReceivedPromise_ = new Promise((resolve) => {
       /** @private {?function()} */
       this.handshakeResponseResolve_ = resolve;
     });
@@ -81,14 +57,12 @@ export class WebviewViewerForTesting {
   waitForHandshakeResponse() {
     const params = {
       history: 1,
-      viewportType: this.viewportType_,
       width: this.containerEl./*OK*/ offsetWidth,
       height: this.containerEl./*OK*/ offsetHeight,
       visibilityState: this.visibilityState_,
-      prerenderSize: 1,
       origin: parseUrlDeprecated(window.location.href).origin,
       csi: 1,
-      cap: 'foo,a2a,handshakepoll',
+      cap: 'foo,a2a,handshakepoll,iframeScroll',
     };
 
     let ampdocUrl = this.ampdocUrl + '#' + serializeQueryString(params);
@@ -122,7 +96,7 @@ export class WebviewViewerForTesting {
     if (!this.iframe) {
       return;
     }
-    const listener = function(e) {
+    const listener = (e) => {
       if (this.isChannelOpen_(e)) {
         //stop polling
         window.clearInterval(this.pollingIntervalIds_[intervalCtr]);
@@ -130,7 +104,7 @@ export class WebviewViewerForTesting {
         this.completeHandshake_(e.data.requestid);
       }
     };
-    window.addEventListener('message', listener.bind(this));
+    window.addEventListener('message', listener);
 
     const message = {
       app: APP,
@@ -159,7 +133,7 @@ export class WebviewViewerForTesting {
     const message = {
       app: APP,
       requestid: requestId,
-      type: MessageType.RESPONSE,
+      type: MessageType_Enum.RESPONSE,
     };
 
     this.log('############## viewer posting1 Message', message);
@@ -168,7 +142,6 @@ export class WebviewViewerForTesting {
 
     this.sendRequest_('visibilitychange', {
       state: this.visibilityState_,
-      prerenderSize: this.prerenderSize,
     });
 
     this.handshakeResponseResolve_();
@@ -187,7 +160,7 @@ export class WebviewViewerForTesting {
       rsvp: true,
       name: eventType,
       data: payload,
-      type: MessageType.REQUEST,
+      type: MessageType_Enum.REQUEST,
     };
     this.iframe.contentWindow./*OK*/ postMessage(message, this.frameOrigin_);
   }

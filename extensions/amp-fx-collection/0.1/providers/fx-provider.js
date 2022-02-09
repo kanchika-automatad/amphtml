@@ -1,37 +1,16 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import {FxType} from '../fx-type'; // eslint-disable-line no-unused-vars
-import {PositionObserverFidelity} from '../../../../src/service/position-observer/position-observer-worker';
-import {Presets} from './amp-fx-presets';
-import {
-  ScrollToggleDispatch,
-  ScrollTogglePosition, // eslint-disable-line no-unused-vars
-  assertValidScrollToggleElement,
-  getScrollToggleFloatInOffset,
-  getScrollTogglePosition,
-  installScrollToggleStyles,
-  scrollToggleFloatIn,
-} from '../scroll-toggle';
-import {Services} from '../../../../src/services';
 import {
   assertDoesNotContainDisplay,
   computedStyle,
   setStyles,
-} from '../../../../src/style';
+} from '#core/dom/style';
+
+import {Services} from '#service';
+import {installPositionObserverServiceForDoc} from '#service/position-observer/position-observer-impl';
+import {PositionObserverFidelity_Enum} from '#service/position-observer/position-observer-worker';
+
+import {devAssert} from '#utils/log';
+
+import {Presets} from './amp-fx-presets';
 import {
   convertEasingKeyword,
   defaultDurationValues,
@@ -41,12 +20,21 @@ import {
   installStyles,
   resolvePercentageToNumber,
 } from './amp-fx-presets-utils';
-import {devAssert} from '../../../../src/log';
+
 import {
   getServiceForDoc,
   registerServiceBuilderForDoc,
-} from '../../../../src/service';
-import {installPositionObserverServiceForDoc} from '../../../../src/service/position-observer/position-observer-impl';
+} from '../../../../src/service-helpers';
+import {FxType} from '../fx-type'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import {
+  ScrollToggleDispatch,
+  ScrollTogglePosition, // eslint-disable-line @typescript-eslint/no-unused-vars
+  assertValidScrollToggleElement,
+  getScrollToggleFloatInOffset,
+  getScrollTogglePosition,
+  installScrollToggleStyles,
+  scrollToggleFloatIn,
+} from '../scroll-toggle';
 
 /**
  * @param {!../../../../src/service/ampdoc-impl.AmpDoc} ampdoc
@@ -64,7 +52,7 @@ export function installScrollToggledFx(ampdoc, element, type) {
   registerServiceBuilderForDoc(ampdoc, fxScrollDispatch, ScrollToggleDispatch);
   const dispatch = getServiceForDoc(ampdoc, fxScrollDispatch);
 
-  const resources = Services.resourcesForDoc(element);
+  const mutator = Services.mutatorForDoc(element);
 
   let shouldMutate = true;
 
@@ -78,7 +66,7 @@ export function installScrollToggledFx(ampdoc, element, type) {
       return;
     }
 
-    dispatch.observe(isShown => {
+    dispatch.observe((isShown) => {
       scrollToggle(
         element,
         isShown,
@@ -94,7 +82,7 @@ export function installScrollToggledFx(ampdoc, element, type) {
     installScrollToggleStyles(element);
   };
 
-  resources.measureMutateElement(element, measure, mutate);
+  mutator.measureMutateElement(element, measure, mutate);
 }
 
 /**
@@ -113,7 +101,7 @@ function scrollToggle(element, isShown, position) {
     scrollToggleFloatIn(element, offset);
   };
 
-  Services.resourcesForDoc(element).measureMutateElement(
+  Services.mutatorForDoc(element).measureMutateElement(
     element,
     measure,
     mutate
@@ -150,8 +138,8 @@ export class FxElement {
     /** @private @const {!../../../../src/service/viewport/viewport-interface.ViewportInterface} */
     this.viewport_ = Services.viewportForDoc(element);
 
-    /** @const @private {!../../../../src/service/resources-interface.ResourcesInterface} */
-    this.resources_ = Services.resourcesForDoc(element);
+    /** @const @private {!../../../../src/service/mutator-interface.MutatorInterface} */
+    this.mutator_ = Services.mutatorForDoc(element);
 
     /** @type {?number} */
     this.viewportHeight = null;
@@ -215,7 +203,7 @@ export class FxElement {
     /** @public {boolean} */
     this.initialTrigger = false;
 
-    this.getAdjustedViewportHeight_().then(adjustedViewportHeight => {
+    this.getAdjustedViewportHeight_().then((adjustedViewportHeight) => {
       this.adjustedViewportHeight = adjustedViewportHeight;
 
       // start observing position of the element.
@@ -231,13 +219,13 @@ export class FxElement {
   observePositionChanges_() {
     this.positionObserver_.observe(
       this.element,
-      PositionObserverFidelity.HIGH,
+      PositionObserverFidelity_Enum.HIGH,
       Presets[this.fxType_].update.bind(this)
     );
 
     this.viewport_.onResize(() => {
       this.updateViewportHeight_();
-      this.getAdjustedViewportHeight_().then(adjustedViewportHeight => {
+      this.getAdjustedViewportHeight_().then((adjustedViewportHeight) => {
         this.adjustedViewportHeight = adjustedViewportHeight;
       });
     });
@@ -245,7 +233,7 @@ export class FxElement {
 
   /** @private	*/
   updateViewportHeight_() {
-    this.resources_.measureElement(() => {
+    this.mutator_.measureElement(() => {
       this.viewportHeight = this.viewport_.getHeight();
     });
   }
@@ -261,7 +249,7 @@ export class FxElement {
    * @private
    */
   getAdjustedViewportHeight_() {
-    return this.resources_.measureElement(() => {
+    return this.mutator_.measureElement(() => {
       const viewportHeight = this.viewport_.getHeight();
 
       let offsetTop = 0;

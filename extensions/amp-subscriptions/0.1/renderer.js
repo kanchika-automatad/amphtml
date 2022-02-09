@@ -1,22 +1,7 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes} from '#core/dom';
+import {childElementByTag} from '#core/dom/query';
 
-import {Services} from '../../../src/services';
-import {childElementByTag, createElementWithAttributes} from '../../../src/dom';
-import {dict} from '../../../src/utils/object';
+import {Services} from '#service';
 
 const CSS_PREFIX = 'i-amphtml-subs';
 
@@ -28,8 +13,8 @@ export class Renderer {
     /** @const @private */
     this.ampdoc_ = ampdoc;
 
-    /** @const @private {!../../../src/service/resources-interface.ResourcesInterface} */
-    this.resources_ = Services.resourcesForDoc(ampdoc);
+    /** @const @private {!../../../src/service/mutator-interface.MutatorInterface} */
+    this.mutator_ = Services.mutatorForDoc(ampdoc);
 
     // Initial state is "unknown".
     this.setGrantState(null);
@@ -53,7 +38,7 @@ export class Renderer {
    * @private
    */
   setState_(type, state) {
-    this.resources_.mutateElement(this.ampdoc_.getBody(), () => {
+    this.mutator_.mutateElement(this.ampdoc_.getBody(), () => {
       this.getBodyElement_().classList.toggle(
         `${CSS_PREFIX}-${type}-unk`,
         state === null
@@ -81,10 +66,10 @@ export class Renderer {
         const element = createElementWithAttributes(
           this.ampdoc_.win.document,
           'div',
-          dict({
+          {
             'class': 'i-amphtml-subs-progress',
             'subscriptions-section': 'loading',
-          })
+          }
         );
         // The loading indicator will be either inserted right before the
         // `<footer>` node or appended as the last child.
@@ -99,7 +84,7 @@ export class Renderer {
    * @private
    */
   toggleState_(type, state) {
-    this.resources_.mutateElement(this.ampdoc_.getBody(), () => {
+    this.mutator_.mutateElement(this.ampdoc_.getBody(), () => {
       this.getBodyElement_().classList.toggle(`${CSS_PREFIX}-${type}`, state);
     });
   }

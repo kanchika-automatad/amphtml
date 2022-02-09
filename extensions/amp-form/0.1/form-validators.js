@@ -1,25 +1,13 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {iterateCursor} from '#core/dom';
+import {getWin} from '#core/window';
+
+import {Services} from '#service';
+
+import {createCustomEvent} from '#utils/event-helper';
+import {dev} from '#utils/log';
+
 import {FormEvents} from './form-events';
-import {Services} from '../../../src/services';
 import {ValidationBubble} from './validation-bubble';
-import {createCustomEvent} from '../../../src/event-helper';
-import {dev} from '../../../src/log';
-import {iterateCursor} from '../../../src/dom';
-import {toWin} from '../../../src/types';
 
 /** @const @private {string} */
 const VALIDATION_CACHE_PREFIX = '__AMP_VALIDATION_';
@@ -85,15 +73,15 @@ export class FormValidator {
     /** @protected @const {!../../../src/service/ampdoc-impl.AmpDoc} */
     this.ampdoc = Services.ampdoc(form);
 
-    /** @const @protected {!../../../src/service/resources-interface.ResourcesInterface} */
-    this.resources = Services.resourcesForDoc(form);
+    /** @const @protected {!../../../src/service/mutator-interface.MutatorInterface} */
+    this.mutator = Services.mutatorForDoc(form);
 
     /** @protected @const {!Document|!ShadowRoot} */
     this.root = this.ampdoc.getRootNode();
 
     /**
      * Tribool indicating last known validity of form.
-     * @private {boolean|null}
+     * @private {?boolean}
      */
     this.formValidity_ = null;
   }
@@ -171,7 +159,7 @@ export class FormValidator {
    * @private
    */
   checkTextAreaValidityInForm_(form) {
-    iterateCursor(form.elements, element => {
+    iterateCursor(form.elements, (element) => {
       if (element.tagName == 'TEXTAREA') {
         this.checkInputValidity(element);
       }
@@ -187,7 +175,7 @@ export class FormValidator {
     const previousValidity = this.formValidity_;
     this.formValidity_ = this.checkFormValidity(this.form);
     if (previousValidity !== this.formValidity_) {
-      const win = toWin(this.form.ownerDocument.defaultView);
+      const win = getWin(this.form);
       const type = this.formValidity_ ? FormEvents.VALID : FormEvents.INVALID;
       const event = createCustomEvent(win, type, null, {bubbles: true});
       this.form.dispatchEvent(event);
@@ -379,7 +367,7 @@ export class AbstractCustomValidator extends FormValidator {
     input.setAttribute('aria-invalid', 'true');
     input.setAttribute('aria-describedby', validationId);
 
-    this.resources.mutateElement(validation, () =>
+    this.mutator.mutateElement(validation, () =>
       validation.classList.add('visible')
     );
   }
@@ -397,7 +385,7 @@ export class AbstractCustomValidator extends FormValidator {
     input.removeAttribute('aria-invalid');
     input.removeAttribute('aria-describedby');
 
-    this.resources.mutateElement(visibleValidation, () =>
+    this.mutator.mutateElement(visibleValidation, () =>
       visibleValidation.classList.remove('visible')
     );
   }
@@ -588,6 +576,8 @@ function getInvalidType(input) {
     }
   }
   // Finding error type with value true
-  const response = validityTypes.filter(type => input.validity[type] === true);
+  const response = validityTypes.filter(
+    (type) => input.validity[type] === true
+  );
   return response.length ? response[0] : null;
 }

@@ -1,20 +1,4 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import {jsonConfiguration} from '../src/json';
+import {jsonConfiguration} from '#core/types/object/json';
 
 /**
  * @typedef {{
@@ -24,7 +8,6 @@ import {jsonConfiguration} from '../src/json';
  *   clientIdScope: (string|undefined),
  *   clientIdCookieName: (string|undefined),
  *   consentHandlingOverride: (boolean|undefined),
- *   remoteHTMLDisabled: (boolean|undefined),
  *   fullWidthHeightRatio: (number|undefined),
  * }}
  */
@@ -117,7 +100,8 @@ const adConfig = jsonConfiguration({
   'adform': {},
 
   'adfox': {
-    prefetch: 'https://yastatic.net/pcode/adfox/loader.js',
+    prefetch: 'https://yandex.ru/ads/system/context.js',
+    preconnect: ['https://yastatic.net/'],
     renderStartImplemented: true,
   },
 
@@ -150,6 +134,11 @@ const adConfig = jsonConfiguration({
     preconnect: ['https://inv-nets.admixer.net', 'https://cdn.admixer.net'],
   },
 
+  'adnuntius': {
+    prefetch: 'https://cdn.adnuntius.com/adn.js',
+    renderStartImplemented: true,
+  },
+
   'adocean': {
     consentHandlingOverride: true,
   },
@@ -170,13 +159,34 @@ const adConfig = jsonConfiguration({
     clientIdScope: 'AMP_ECID_ADPON',
   },
 
+  'adpushup': {
+    prefetch: 'https://securepubads.g.doubleclick.net/tag/js/gpt.js',
+    preconnect: 'https://cdn.adpushup.com',
+  },
+
   'adreactor': {},
+
+  'ads2bid': {
+    renderStartImplemented: true,
+  },
 
   'adsensor': {
     prefetch: 'https://wfpscripts.webspectator.com/amp/adsensor-amp.js',
     clientIdScope: 'amp_ecid_adensor',
     renderStartImplemented: true,
   },
+
+  'adservsolutions': {},
+
+  'adskeeper': {
+    renderStartImplemented: true,
+    preconnect: [
+      'https://jsc.adskeeper.com',
+      'https://servicer.adskeeper.com',
+      'https://s-img.adskeeper.com',
+    ],
+  },
+
   'adsloom': {
     clientIdScope: 'AMP_ECID_ADSLOOM',
   },
@@ -207,6 +217,11 @@ const adConfig = jsonConfiguration({
     preconnect: ['https://mads.at.atwola.com', 'https://aka-cdn.adtechus.com'],
   },
 
+  'adtelligent': {
+    preconnect: ['https://s.adtelligent.com'],
+    renderStartImplemented: true,
+  },
+
   'adthrive': {
     prefetch: ['https://www.googletagservices.com/tag/js/gpt.js'],
     preconnect: [
@@ -224,8 +239,13 @@ const adConfig = jsonConfiguration({
 
   'aduptech': {
     prefetch: 'https://s.d.adup-tech.com/jsapi',
-    preconnect: ['https://d.adup-tech.com', 'https://m.adup-tech.com'],
+    preconnect: [
+      'https://d.adup-tech.com',
+      'https://m.adup-tech.com',
+      'https://v.adup-tech.com',
+    ],
     renderStartImplemented: true,
+    consentHandlingOverride: true,
   },
 
   'adventive': {
@@ -286,8 +306,27 @@ const adConfig = jsonConfiguration({
       'https://v.amoad.com',
     ],
   },
+  'amplified': {
+    preconnect: 'https://srv.clickfuse.com',
+    renderStartImplemented: true,
+  },
+
+  'andbeyond': {
+    prefetch: 'https://securepubads.g.doubleclick.net/tag/js/gpt.js',
+    preconnect: 'https://cdn.andbeyond.media',
+  },
 
   'aniview': {
+    renderStartImplemented: true,
+  },
+
+  'anyclip': {
+    prefetch:
+      'https://player.anyclip.com/anyclip-widget/lre-widget/prod/v1/src/lre.js',
+    preconnect: [
+      'https://trafficmanager.anyclip.com',
+      'https://lreprx-server.anyclip.com',
+    ],
     renderStartImplemented: true,
   },
 
@@ -301,16 +340,20 @@ const adConfig = jsonConfiguration({
     prefetch: 'https://s.ato.mx/p.js',
   },
 
+  'avantisvideo': {
+    renderStartImplemented: true,
+  },
+
   'beaverads': {
     renderStartImplemented: true,
   },
 
   'beopinion': {
-    prefetch: 'https://widget.beopinion.com/sdk.js',
+    prefetch: 'https://widget.beop.io/sdk.js',
     preconnect: [
-      'https://t.beopinion.com',
-      'https://s.beopinion.com',
-      'https://data.beopinion.com',
+      'https://t.beop.io',
+      'https://s.beop.io',
+      'https://data.beop.io',
     ],
     renderStartImplemented: true,
   },
@@ -329,9 +372,16 @@ const adConfig = jsonConfiguration({
     preconnect: ['https://static.bh-cdn.com', 'https://core-api.bringhub.io'],
   },
 
+  'broadbandy': {
+    renderStartImplemented: true,
+  },
+
   'broadstreetads': {
     prefetch: 'https://cdn.broadstreetads.com/init-2.min.js',
+    renderStartImplemented: true,
   },
+
+  'byplay': {},
 
   'caajainfeed': {
     prefetch: ['https://cdn.amanad.adtdp.com/sdk/ajaamp.js'],
@@ -360,6 +410,11 @@ const adConfig = jsonConfiguration({
     prefetch: 'https://static.clmbtech.com/ad/commons/js/colombia-amp.js',
   },
 
+  'colombiafeed': {
+    prefetch:
+      'https://static.clmbtech.com/c1e/static/themes/js/colombiafeed-amp.js',
+  },
+
   'conative': {
     renderStartImplemented: true,
   },
@@ -385,6 +440,14 @@ const adConfig = jsonConfiguration({
       'https://api.dable.io',
       'https://images.dable.io',
     ],
+    renderStartImplemented: true,
+  },
+
+  'dex': {
+    renderStartImplemented: true,
+  },
+
+  'digiteka': {
     renderStartImplemented: true,
   },
 
@@ -417,11 +480,6 @@ const adConfig = jsonConfiguration({
     ],
   },
 
-  'eas': {
-    prefetch: 'https://amp.emediate.eu/amp.v0.js',
-    renderStartImplemented: true,
-  },
-
   'empower': {
     prefetch: 'https://cdn.empower.net/sdk/amp-ad.min.js',
     renderStartImplemented: true,
@@ -435,6 +493,10 @@ const adConfig = jsonConfiguration({
     prefetch: 'https://us.img.e-planning.net/layers/epl-amp.js',
   },
 
+  'exco': {
+    renderStartImplemented: true,
+  },
+
   'ezoic': {
     prefetch: [
       'https://www.googletagservices.com/tag/js/gpt.js',
@@ -442,6 +504,7 @@ const adConfig = jsonConfiguration({
     ],
     clientIdScope: 'AMP_ECID_EZOIC',
     consentHandlingOverride: true,
+    renderStartImplemented: true,
   },
 
   'f1e': {
@@ -455,23 +518,44 @@ const adConfig = jsonConfiguration({
 
   'fake': {},
 
+  'fake-delayed': {
+    renderStartImplemented: true,
+  },
+
+  'feedad': {
+    clientIdScope: '__fa_amp',
+    prefetch: 'https://web.feedad.com/sdk/feedad-async.js',
+    renderStartImplemented: true,
+    fullWidthHeightRatio: 16 / 9,
+    consentHandlingOverride: true,
+  },
+
   'felmat': {
     prefetch: 'https://t.felmat.net/js/fmamp.js',
     renderStartImplemented: true,
   },
 
+  'finative': {},
+
+  'firstimpression': {
+    prefetch: 'https://ecdn.firstimpression.io/static/js/fiamp.js',
+    preconnect: 'https://cdn.firstimpression.io',
+    renderStartImplemented: true,
+    consentHandlingOverride: true,
+  },
+
   'flite': {},
 
   'fluct': {
+    prefetch: ['https://pdn.adingo.jp/p.js'],
     preconnect: [
       'https://cdn-fluct.sh.adingo.jp',
-      'https://s.sh.adingo.jp',
+      'https://sh.adingo.jp',
       'https://i.adingo.jp',
     ],
   },
 
   'forkmedia': {
-    prefetch: 'https://delivery.forkcdn.com/rappio/inread/v1.1/amp/inread.js',
     renderStartImplemented: true,
   },
 
@@ -484,12 +568,18 @@ const adConfig = jsonConfiguration({
     prefetch: 'https://assets.adtomafusion.net/fusion/latest/fusion-amp.min.js',
   },
 
+  'gecko': {},
+
   'genieessp': {
     prefetch: 'https://js.gsspcln.jp/l/amp.js',
   },
 
   'giraff': {
     renderStartImplemented: true,
+  },
+
+  'glomex': {
+    prefetch: 'https://player.glomex.com/integration/1/amp-embed.js',
   },
 
   'gmossp': {
@@ -557,10 +647,27 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'insurads': {
+    prefetch: 'https://securepubads.g.doubleclick.net/tag/js/gpt.js',
+    preconnect: [
+      'https://tpc.googlesyndication.com',
+      'https://adservice.google.com',
+      'https://cdn.insurads.com',
+      'https://services.insurads.com',
+      'https://messaging.insurads.com',
+    ],
+    renderStartImplemented: true,
+    consentHandlingOverride: true,
+  },
+
   'invibes': {
     prefetch: 'https://k.r66net.com/GetAmpLink',
     renderStartImplemented: true,
     consentHandlingOverride: true,
+  },
+
+  'iprom': {
+    prefetch: 'https://cdn.ipromcloud.com/ipromNS.js',
   },
 
   'ix': {
@@ -573,7 +680,16 @@ const adConfig = jsonConfiguration({
 
   'kargo': {},
 
+  'ketshwa': {},
+
   'kiosked': {
+    renderStartImplemented: true,
+  },
+
+  'jixie': {
+    prefetch: ['https://scripts.jixie.media/jxamp.min.js'],
+    clientIdScope: '__jxamp',
+    clientIdCookieName: '_jx',
     renderStartImplemented: true,
   },
 
@@ -617,6 +733,14 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'luckyads': {
+    renderStartImplemented: true,
+  },
+
+  'macaw': {
+    renderStartImplemented: true,
+  },
+
   'mads': {
     prefetch: 'https://eu2.madsone.com/js/tags.js',
   },
@@ -630,6 +754,24 @@ const adConfig = jsonConfiguration({
     ],
   },
 
+  'marfeel': {
+    prefetch: 'https://securepubads.g.doubleclick.net/tag/js/gpt.js',
+    preconnect: [
+      'https://live.mrf.io',
+      'https://tpc.googlesyndication.com',
+      'https://fastlane.rubiconproject.com',
+      'https://htlb.casalemedia.com',
+      'https://prg.smartadserver.com',
+      'https://ib.adnxs.com',
+      'https://bidder.criteo.com',
+      'https://marfeel-d.openx.net',
+      'https://ice.360yield.com',
+      'https://mbid.marfeelrev.com',
+      'https://adservice.google.com',
+    ],
+    consentHandlingOverride: true,
+  },
+
   'mantis-recommend': {
     prefetch: 'https://assets.mantisadnetwork.com/recommend.min.js',
     preconnect: [
@@ -637,6 +779,8 @@ const adConfig = jsonConfiguration({
       'https://resize.mantisadnetwork.com',
     ],
   },
+
+  'mediaad': {},
 
   'medianet': {
     preconnect: 'https://contextual.media.net',
@@ -703,8 +847,30 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'my6sense': {
+    renderStartImplemented: true,
+  },
+
+  'myfinance': {
+    preconnect: [
+      'https://a.myfidevs.io',
+      'https://static.myfinance.com',
+      'https://www.myfinance.com',
+    ],
+    renderStartImplemented: true,
+    clientIdScope: 'AMP_ECID_GOOGLE',
+  },
+
+  'myoffrz': {
+    renderStartImplemented: true,
+  },
+
   'mytarget': {
     prefetch: 'https://ad.mail.ru/static/ads-async.js',
+    renderStartImplemented: true,
+  },
+
+  'myua': {
     renderStartImplemented: true,
   },
 
@@ -716,6 +882,10 @@ const adConfig = jsonConfiguration({
 
   'nativeroll': {
     prefetch: 'https://cdn01.nativeroll.tv/js/seedr-player.min.js',
+  },
+
+  'nativery': {
+    preconnect: 'https://cdn.nativery.com',
   },
 
   'nativo': {
@@ -748,6 +918,10 @@ const adConfig = jsonConfiguration({
 
   'nws': {},
 
+  'oblivki': {
+    renderStartImplemented: true,
+  },
+
   'onead': {
     prefetch: 'https://ad-specs.guoshipartners.com/static/js/onead-amp.min.js',
     renderStartImplemented: true,
@@ -769,7 +943,9 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
-  'opinary': {},
+  'opinary': {
+    renderStartImplemented: true,
+  },
 
   'outbrain': {
     renderStartImplemented: true,
@@ -781,6 +957,11 @@ const adConfig = jsonConfiguration({
   'pixels': {
     prefetch: 'https://cdn.adsfactor.net/amp/pixels-amp.min.js',
     clientIdCookieName: '__AF',
+    renderStartImplemented: true,
+  },
+
+  'playstream': {
+    prefetch: 'https://app.playstream.media/js/amp.js',
     renderStartImplemented: true,
   },
 
@@ -800,6 +981,10 @@ const adConfig = jsonConfiguration({
   },
 
   'postquare': {},
+
+  'ppstudio': {
+    renderStartImplemented: true,
+  },
 
   'pressboard': {
     renderStartImplemented: true,
@@ -828,6 +1013,11 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'pulse': {
+    prefetch: 'https://static.pulse.mail.ru/pulse-widget-amp.js',
+    renderStartImplemented: true,
+  },
+
   'pulsepoint': {
     prefetch: 'https://ads.contextweb.com/TagPublish/getjs.static.js',
     preconnect: 'https://tag.contextweb.com',
@@ -844,7 +1034,17 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'rakutenunifiedads': {
+    prefetch: 'https://s-cdn.rmp.rakuten.co.jp/js/amp.js',
+    renderStartImplemented: true,
+  },
+
   'rbinfox': {
+    renderStartImplemented: true,
+  },
+
+  'rcmwidget': {
+    prefetch: 'https://rcmjs.rambler.ru/static/rcmw/rcmw-amp.js',
     renderStartImplemented: true,
   },
 
@@ -860,7 +1060,23 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'recreativ': {
+    prefetch: 'https://go.rcvlink.com/static/amp.js',
+    renderStartImplemented: true,
+  },
+
   'relap': {
+    renderStartImplemented: true,
+  },
+
+  'relappro': {
+    prefetch: 'https://cdn.relappro.com/adservices/amp/relappro.amp.min.js',
+    preconnect: 'https://tags.relappro.com',
+    renderStartImplemented: true,
+  },
+
+  'remixd': {
+    preconnect: 'https://tags.remixd.com',
     renderStartImplemented: true,
   },
 
@@ -895,11 +1111,22 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'sabavision': {
+    renderStartImplemented: true,
+  },
+
   'sas': {
     renderStartImplemented: true,
   },
 
   'seedingalliance': {},
+
+  'seedtag': {
+    prefetch: 'https://config.seedtag.com/omid/bridge/bridge.js',
+    preconnect: ['https://s.seedtag.com'],
+    consentHandlingOverride: true,
+    renderStartImplemented: true,
+  },
 
   'sekindo': {
     renderStartImplemented: true,
@@ -933,6 +1160,10 @@ const adConfig = jsonConfiguration({
       'https://video.freeskreen.com',
     ],
     renderStartImplemented: true,
+  },
+
+  'smartads': {
+    prefetch: 'https://smart-ads.biz/amp.js',
   },
 
   'smartadserver': {
@@ -973,6 +1204,10 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'sona': {
+    renderStartImplemented: true,
+  },
+
   'sovrn': {
     prefetch: 'https://ap.lijit.com/www/sovrn_amp/sovrn_ads.js',
   },
@@ -987,9 +1222,14 @@ const adConfig = jsonConfiguration({
   },
 
   'springAds': {
-    prefetch: 'https://www.asadcdn.com/adlib/adlib_seq.js',
     preconnect: ['https://ib.adnxs.com'],
     renderStartImplemented: true,
+  },
+
+  'ssp': {
+    prefetch: 'https://ssp.imedia.cz/static/js/ssp.js',
+    renderStartImplemented: true,
+    consentHandlingOverride: true,
   },
 
   'strossle': {
@@ -1019,19 +1259,36 @@ const adConfig = jsonConfiguration({
 
   'taboola': {},
 
+  'tagon': {
+    prefetch: 'https://js.tagon.co/tagon-amp.min.js',
+  },
+
+  'tail': {
+    renderStartImplemented: true,
+  },
+
   'tcsemotion': {
     prefetch: 'https://ads.tcsemotion.com/www/delivery/amphb.js',
     renderStartImplemented: true,
   },
 
   'teads': {
-    prefetch: 'https://a.teads.tv/media/format/v3/teads-format.min.js',
+    prefetch: 'https://s8t.teads.tv/media/format/v3/teads-format.min.js',
     preconnect: [
       'https://cdn2.teads.tv',
+      'https://a.teads.tv',
       'https://t.teads.tv',
       'https://r.teads.tv',
     ],
     consentHandlingOverride: true,
+  },
+
+  'temedya': {
+    prefetch: [
+      'https://widget.cdn.vidyome.com/builds/loader-amp.js',
+      'https://vidyome-com.cdn.vidyome.com/vidyome/builds/widgets.js',
+    ],
+    renderStartImplemented: true,
   },
 
   'torimochi': {
@@ -1040,6 +1297,11 @@ const adConfig = jsonConfiguration({
 
   'tracdelight': {
     prefetch: 'https://scripts.tracdelight.io/amp.js',
+    renderStartImplemented: true,
+  },
+
+  'trafficstars': {
+    prefetch: 'https://cdn.tsyndicate.com/sdk/v1/master.spot.js',
     renderStartImplemented: true,
   },
 
@@ -1074,6 +1336,11 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'vdoai': {
+    prefetch: 'https://a.vdo.ai/core/dependencies_amp/vdo.min.js',
+    renderStartImplemented: true,
+  },
+
   'videointelligence': {
     preconnect: 'https://s.vi-serve.com',
     renderStartImplemented: true,
@@ -1085,6 +1352,10 @@ const adConfig = jsonConfiguration({
 
   'viralize': {
     renderStartImplemented: true,
+  },
+
+  'vlyby': {
+    prefetch: 'https://cdn.vlyby.com/amp/qad/qad-outer2.js',
   },
 
   'vmfive': {
@@ -1106,6 +1377,10 @@ const adConfig = jsonConfiguration({
     ],
   },
 
+  'whopainfeed': {
+    prefetch: 'https://widget.infeed.com.ar/widget/widget-amp.js',
+  },
+
   'widespace': {},
 
   'wisteria': {
@@ -1118,14 +1393,24 @@ const adConfig = jsonConfiguration({
     renderStartImplemented: true,
   },
 
+  'wunderkind': {
+    preconnect: ['https://tag.wknd.ai', 'https://api.bounceexchange.com'],
+    renderStartImplemented: true,
+    fullWidthHeightRatio: 4 / 3,
+  },
+
   'xlift': {
     prefetch: 'https://cdn.x-lift.jp/resources/common/xlift_amp.js',
     renderStartImplemented: true,
   },
 
   'yahoo': {
-    prefetch: 'https://s.yimg.com/os/ampad/display.js',
+    prefetch: 'https://s.yimg.com/aaq/ampad/display.js',
     preconnect: 'https://us.adserver.yahoo.com',
+  },
+
+  'yahoofedads': {
+    renderStartImplemented: true,
   },
 
   'yahoojp': {
@@ -1141,7 +1426,23 @@ const adConfig = jsonConfiguration({
   },
 
   'yandex': {
-    prefetch: 'https://yastatic.net/partner-code/loaders/context_amp.js',
+    prefetch: 'https://yandex.ru/ads/system/context.js',
+    preconnect: ['https://yastatic.net/'],
+    renderStartImplemented: true,
+  },
+
+  'yektanet': {
+    preconnect: [
+      'https://cdn.yektanet.com',
+      'https://cg-sc.yektanet.com',
+      'https://native.yektanet.com',
+      'https://nfetch.yektanet.net',
+      'https://rfetch.yektanet.net',
+      'https://scrapper.yektanet.com',
+      'https://ua.yektanet.com',
+      'https://bfetch.yektanet.com',
+      'https://mostatil.cdn.yektanet.com',
+    ],
     renderStartImplemented: true,
   },
 
@@ -1198,6 +1499,8 @@ const adConfig = jsonConfiguration({
     prefetch: 'https://dup.baidustatic.com/js/dm.js',
     renderStartImplemented: true,
   },
+
+  'sulvo': {},
 });
 
 export {adConfig};

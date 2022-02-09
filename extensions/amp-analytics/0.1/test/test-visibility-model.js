@@ -1,25 +1,9 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {VisibilityModel} from '../visibility-model';
 
 const NO_SPEC = {};
 const NO_CALC = () => 0;
 
-describes.sandboxed('VisibilityModel', {}, () => {
+describes.sandboxed('VisibilityModel', {}, (env) => {
   let startTime;
   let clock;
 
@@ -31,7 +15,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
   };
 
   beforeEach(() => {
-    clock = sandbox.useFakeTimers();
+    clock = env.sandbox.useFakeTimers();
     startTime = 10000;
     clock.tick(startTime + 1);
   });
@@ -177,9 +161,9 @@ describes.sandboxed('VisibilityModel', {}, () => {
       const vh = new VisibilityModel(NO_SPEC, calcVisibility);
       vh.scheduledUpdateTimeoutId_ = 1;
       vh.scheduleRepeatId_ = 1;
-      const unsubscribeSpy = sandbox.spy();
+      const unsubscribeSpy = env.sandbox.spy();
       vh.unsubscribe(unsubscribeSpy);
-      const removeSpy = sandbox.spy(vh.onTriggerObservable_, 'removeAll');
+      const removeSpy = env.sandbox.spy(vh.onTriggerObservable_, 'removeAll');
 
       vh.dispose();
       expect(vh.scheduledUpdateTimeoutId_).to.be.null;
@@ -192,7 +176,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('should update on any visibility event', () => {
-      const updateStub = sandbox.stub(VisibilityModel.prototype, 'update_');
+      const updateStub = env.sandbox.stub(VisibilityModel.prototype, 'update_');
       const vh = new VisibilityModel(NO_SPEC, calcVisibility);
       vh.setReady(true);
       vh.setReady(false);
@@ -200,7 +184,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('should NOT update when started visible', () => {
-      const updateStub = sandbox.stub(VisibilityModel.prototype, 'update_');
+      const updateStub = env.sandbox.stub(VisibilityModel.prototype, 'update_');
       visibility = 1;
       const vh = new VisibilityModel(NO_SPEC, calcVisibility);
       expect(updateStub).to.not.be.called;
@@ -211,7 +195,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('should NOT update when started invisible', () => {
-      const updateStub = sandbox.stub(VisibilityModel.prototype, 'update_');
+      const updateStub = env.sandbox.stub(VisibilityModel.prototype, 'update_');
       visibility = 0;
       const vh = new VisibilityModel(NO_SPEC, calcVisibility);
       expect(updateStub).to.not.be.called;
@@ -222,7 +206,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('should update visibility and ready', () => {
-      const updateStub = sandbox.stub(VisibilityModel.prototype, 'update_');
+      const updateStub = env.sandbox.stub(VisibilityModel.prototype, 'update_');
       visibility = 0;
       const vh = new VisibilityModel(NO_SPEC, calcVisibility);
 
@@ -352,15 +336,15 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         NO_CALC
       );
-      updateStub = sandbox.stub(vh, 'update').callsFake(() => {
+      updateStub = env.sandbox.stub(vh, 'update').callsFake(() => {
         if (visibilityValueForTesting) {
           vh.update_(visibilityValueForTesting);
         }
       });
-      sandbox.stub(vh, 'getVisibility_').callsFake(() => {
+      env.sandbox.stub(vh, 'getVisibility_').callsFake(() => {
         return visibilityValueForTesting;
       });
-      eventSpy = vh.eventResolver_ = sandbox.spy();
+      eventSpy = vh.eventResolver_ = env.sandbox.spy();
     });
 
     afterEach(() => {
@@ -368,7 +352,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('conditions not met only', () => {
-      sandbox.stub(vh, 'setReady'); // Because it calls update()
+      env.sandbox.stub(vh, 'setReady'); // Because it calls update()
       visibilityValueForTesting = 0.1;
       vh.update_(visibilityValueForTesting);
       expect(vh.scheduledUpdateTimeoutId_).to.be.ok;
@@ -487,7 +471,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       let reportPromise;
       let promiseResolver;
       beforeEach(() => {
-        reportPromise = new Promise(resolve => {
+        reportPromise = new Promise((resolve) => {
           promiseResolver = resolve;
         });
         vh.setReportReady(() => reportPromise);
@@ -565,7 +549,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('conditions met, wait to reset', () => {
-      const resolveSpy = (vh.eventResolver_ = sandbox.spy());
+      const resolveSpy = (vh.eventResolver_ = env.sandbox.spy());
       vh.update_(1);
       vh.continuousTime_ = 10;
       vh.totalVisibleTime_ = 10;
@@ -575,8 +559,8 @@ describes.sandboxed('VisibilityModel', {}, () => {
     });
 
     it('conditions not met, reset', () => {
-      const updateCounterSpy = (vh.updateCounters_ = sandbox.spy());
-      const resetSpy = (vh.reset_ = sandbox.spy());
+      const updateCounterSpy = (vh.updateCounters_ = env.sandbox.spy());
+      const resetSpy = (vh.reset_ = env.sandbox.spy());
       vh.waitToReset_ = true;
       vh.update_(1);
       expect(resetSpy).to.not.be.called;
@@ -882,7 +866,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       visibility = 0.63;
       vh.update();
@@ -902,7 +886,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       visibility = 0.49;
       vh.update();
@@ -923,7 +907,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       visibility = 0.63;
       vh.update();
@@ -942,7 +926,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       expect(vh.getState(startTime)).to.contains({maxVisiblePercentage: 64});
       expect(eventSpy).to.not.be.called;
 
-      sandbox.stub(vh, 'reset_');
+      env.sandbox.stub(vh, 'reset_');
       clock.tick(1);
       expect(vh.getState(startTime)).to.contains({
         maxVisiblePercentage: 64,
@@ -958,7 +942,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       visibility = 0.63;
       vh.update();
@@ -986,7 +970,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       });
       expect(eventSpy).to.not.be.called;
 
-      sandbox.stub(vh, 'reset_');
+      env.sandbox.stub(vh, 'reset_');
       clock.tick(999);
       expect(eventSpy).to.be.calledOnce;
       expect(vh.getState(startTime)).to.contains({
@@ -1003,7 +987,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       visibility = 0.05;
       vh.update();
@@ -1019,7 +1003,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       expect(vh.getState(startTime)).to.contains({maxVisiblePercentage: 11});
       expect(eventSpy).to.not.be.called;
 
-      sandbox.stub(vh, 'reset_');
+      env.sandbox.stub(vh, 'reset_');
       clock.tick(1000);
       expect(eventSpy).to.be.calledOnce;
       expect(vh.getState(startTime)).to.contains({
@@ -1041,7 +1025,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       visibility = 0.05;
       vh.update();
@@ -1054,7 +1038,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       expect(vh.getState(startTime)).to.contains({maxVisiblePercentage: 10});
       expect(eventSpy).to.not.be.called;
 
-      sandbox.stub(vh, 'reset_');
+      env.sandbox.stub(vh, 'reset_');
       clock.tick(1000);
       expect(eventSpy).to.be.calledOnce;
       expect(vh.getState(startTime)).to.contains({
@@ -1076,7 +1060,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
 
       clock.tick(999);
       visibility = 0;
@@ -1093,7 +1077,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       clock.tick(999);
       expect(eventSpy).to.not.be.called;
 
-      sandbox.stub(vh, 'reset_');
+      env.sandbox.stub(vh, 'reset_');
       clock.tick(1);
       expect(eventSpy).to.be.calledOnce;
       expect(vh.getState(startTime)).to.contains({
@@ -1112,7 +1096,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
       visibility = 0.99;
       clock.tick(200);
       vh.update();
@@ -1132,9 +1116,9 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const eventSpy = (vh.eventResolver_ = sandbox.spy());
-      sandbox.stub(vh, 'reset_').callsFake(() => {
-        vh.eventPromise_ = new Promise(unused => {
+      const eventSpy = (vh.eventResolver_ = env.sandbox.spy());
+      env.sandbox.stub(vh, 'reset_').callsFake(() => {
+        vh.eventPromise_ = new Promise((unused) => {
           vh.eventResolver_ = eventSpy;
         });
         vh.eventPromise_.then(() => {
@@ -1182,7 +1166,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       calcVisibility = () => visibility;
     });
 
-    it('should wait for repeat interval', function*() {
+    it('should wait for repeat interval', function* () {
       const vh = new VisibilityModel(
         {
           visiblePercentageMin: 49,
@@ -1190,7 +1174,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const spy = sandbox.spy();
+      const spy = env.sandbox.spy();
       vh.onTriggerEvent(() => {
         spy();
         vh.maybeDispose();
@@ -1207,7 +1191,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
       expect(spy).to.be.calledOnce;
     });
 
-    it('should wait for not match to fire again w/o interval', function*() {
+    it('should wait for not match to fire again w/o interval', function* () {
       const vh = new VisibilityModel(
         {
           visiblePercentageMin: 49,
@@ -1215,7 +1199,7 @@ describes.sandboxed('VisibilityModel', {}, () => {
         },
         calcVisibility
       );
-      const spy = sandbox.spy();
+      const spy = env.sandbox.spy();
       vh.onTriggerEvent(() => {
         spy();
         vh.maybeDispose();

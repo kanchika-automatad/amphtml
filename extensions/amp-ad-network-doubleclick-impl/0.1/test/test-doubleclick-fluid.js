@@ -1,28 +1,13 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 // Need the following side-effect import because in actual production code,
 // Fast Fetch impls are always loaded via an AmpAd tag, which means AmpAd is
 // always available for them. However, when we test an impl in isolation,
 // AmpAd is not loaded already, so we need to load it separately.
 import '../../../amp-ad/0.1/amp-ad';
+import {createElementWithAttributes} from '#core/dom';
+import {utf8Encode} from '#core/types/string/bytes';
+
 import {AmpAdNetworkDoubleclickImpl} from '../amp-ad-network-doubleclick-impl';
 import {SafeframeHostApi, removeSafeframeListener} from '../safeframe-host';
-import {createElementWithAttributes} from '../../../../src/dom';
-import {utf8Encode} from '../../../../src/utils/bytes';
 
 /**
  * We're allowing external resources because otherwise using realWin causes
@@ -54,7 +39,7 @@ const rawCreative = `
   </script>`;
 
 const mockPromise = {
-  then: callback => {
+  then: (callback) => {
     callback();
     return {
       catch: () => {},
@@ -72,7 +57,7 @@ const mockPromise = {
 function createScaffoldingForFluidRendering(impl, sandbox, resize = true) {
   impl.getVsync = () => {
     return {
-      run: runArgs => {
+      run: (runArgs) => {
         runArgs.mutate();
       },
     };
@@ -93,17 +78,15 @@ function createScaffoldingForFluidRendering(impl, sandbox, resize = true) {
   sandbox./*OK*/ stub(impl.safeframeApi_, 'setupGeom_');
 }
 
-describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
+describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, (env) => {
   let impl;
   let multiSizeImpl;
   let element;
   let multiSizeElement;
-  let sandbox;
 
   const initialSize = {width: 0, height: 0};
 
   beforeEach(() => {
-    sandbox = env.sandbox;
     env.win.__AMP_MODE.test = true;
     const doc = env.win.document;
     // TODO(a4a-cam@): This is necessary in the short term, until A4A is
@@ -146,7 +129,6 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   afterEach(() => {
-    sandbox.restore();
     removeSafeframeListener();
     impl.cleanupAfterTest();
     impl = null;
@@ -166,7 +148,7 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   it('should NOT load delayed impression amp-pixels', () => {
-    const fireDelayedImpressionsSpy = sandbox.spy(
+    const fireDelayedImpressionsSpy = env.sandbox.spy(
       impl,
       'fireDelayedImpressions'
     );
@@ -191,6 +173,9 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   it('should contain sz=320x50 in ad request by default', () => {
+    impl.uiHandler = {
+      isStickyAd: () => false,
+    };
     impl.initiateAdRequest();
     return impl.adPromise_.then(() => {
       expect(impl.adUrl_).to.be.ok;
@@ -199,6 +184,9 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   it('should contain mulitple sizes in ad request', () => {
+    multiSizeImpl.uiHandler = {
+      isStickyAd: () => false,
+    };
     multiSizeImpl.initiateAdRequest();
     return multiSizeImpl.adPromise_.then(() => {
       expect(multiSizeImpl.adUrl_).to.be.ok;
@@ -234,12 +222,12 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   it('should fire delayed impression ping', () => {
-    createScaffoldingForFluidRendering(impl, sandbox);
-    const connectMessagingChannelSpy = sandbox./*OK*/ spy(
+    createScaffoldingForFluidRendering(impl, env.sandbox);
+    const connectMessagingChannelSpy = env.sandbox./*OK*/ spy(
       impl.safeframeApi_,
       'connectMessagingChannel'
     );
-    const onFluidResizeSpy = sandbox./*OK*/ spy(
+    const onFluidResizeSpy = env.sandbox./*OK*/ spy(
       impl.safeframeApi_,
       'onFluidResize_'
     );
@@ -252,12 +240,12 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   it('should fire delayed impression ping, if creative partly visible', () => {
-    createScaffoldingForFluidRendering(impl, sandbox, false);
-    const connectMessagingChannelSpy = sandbox./*OK*/ spy(
+    createScaffoldingForFluidRendering(impl, env.sandbox, false);
+    const connectMessagingChannelSpy = env.sandbox./*OK*/ spy(
       impl.safeframeApi_,
       'connectMessagingChannel'
     );
-    const onFluidResizeSpy = sandbox./*OK*/ spy(
+    const onFluidResizeSpy = env.sandbox./*OK*/ spy(
       impl.safeframeApi_,
       'onFluidResize_'
     );
@@ -273,7 +261,7 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   });
 
   it('should set height on iframe', () => {
-    createScaffoldingForFluidRendering(impl, sandbox);
+    createScaffoldingForFluidRendering(impl, env.sandbox);
     return impl.adPromise_.then(() => {
       return impl.layoutCallback().then(() => {
         expect(impl.iframe.style.height).to.equal('250px');
@@ -284,9 +272,12 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should fire impression for AMP fluid creative', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    sandbox.stub(impl, 'setCssPosition_').returns(mockPromise);
-    sandbox.stub(impl, 'attemptChangeHeight').returns(mockPromise);
-    const delayedImpressionSpy = sandbox.spy(impl, 'fireDelayedImpressions');
+    env.sandbox.stub(impl, 'setCssPosition_').returns(mockPromise);
+    env.sandbox.stub(impl, 'attemptChangeHeight').returns(mockPromise);
+    const delayedImpressionSpy = env.sandbox.spy(
+      impl,
+      'fireDelayedImpressions'
+    );
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
@@ -299,9 +290,12 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should fire impression for AMP fluid creative, if partly visible', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    sandbox.stub(impl, 'setCssPosition_').returns(Promise.resolve());
-    sandbox.stub(impl, 'attemptChangeHeight').returns(Promise.reject());
-    const delayedImpressionSpy = sandbox.spy(impl, 'fireDelayedImpressions');
+    env.sandbox.stub(impl, 'setCssPosition_').returns(Promise.resolve());
+    env.sandbox.stub(impl, 'attemptChangeHeight').returns(Promise.reject());
+    const delayedImpressionSpy = env.sandbox.spy(
+      impl,
+      'fireDelayedImpressions'
+    );
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
@@ -318,9 +312,12 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should not fire impression for AMP fluid creative', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    sandbox.stub(impl, 'setCssPosition_').returns(Promise.resolve());
-    sandbox.stub(impl, 'attemptChangeHeight').returns(Promise.reject());
-    const delayedImpressionSpy = sandbox.spy(impl, 'fireDelayedImpressions');
+    env.sandbox.stub(impl, 'setCssPosition_').returns(Promise.resolve());
+    env.sandbox.stub(impl, 'attemptChangeHeight').returns(Promise.reject());
+    const delayedImpressionSpy = env.sandbox.spy(
+      impl,
+      'fireDelayedImpressions'
+    );
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
@@ -333,10 +330,15 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should set expansion re-attempt flag after initial failure', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    const attemptChangeHeightStub = sandbox.stub(impl, 'attemptChangeHeight');
+    const attemptChangeHeightStub = env.sandbox.stub(
+      impl,
+      'attemptChangeHeight'
+    );
     attemptChangeHeightStub.returns(Promise.reject());
-    sandbox.stub(impl, 'setCssPosition_').returns(Promise.resolve());
-    sandbox.stub(impl, 'attemptToRenderCreative').returns(Promise.resolve());
+    env.sandbox.stub(impl, 'setCssPosition_').returns(Promise.resolve());
+    env.sandbox
+      .stub(impl, 'attemptToRenderCreative')
+      .returns(Promise.resolve());
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
@@ -349,10 +351,15 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should re-attempt expansion after initial failure', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    const attemptChangeHeightStub = sandbox.stub(impl, 'attemptChangeHeight');
+    const attemptChangeHeightStub = env.sandbox.stub(
+      impl,
+      'attemptChangeHeight'
+    );
     attemptChangeHeightStub.returns(Promise.resolve());
-    sandbox.stub(impl, 'attemptToRenderCreative').returns(Promise.resolve());
-    sandbox.stub(impl, 'setCssPosition_').returns(mockPromise);
+    env.sandbox
+      .stub(impl, 'attemptToRenderCreative')
+      .returns(Promise.resolve());
+    env.sandbox.stub(impl, 'setCssPosition_').returns(mockPromise);
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
@@ -367,15 +374,20 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should set position: static when measuring height on AMP fluid', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    const attemptChangeHeightStub = sandbox.stub(impl, 'attemptChangeHeight');
-    const mutateElementStub = sandbox.stub(impl, 'mutateElement');
+    const attemptChangeHeightStub = env.sandbox.stub(
+      impl,
+      'attemptChangeHeight'
+    );
+    const mutateElementStub = env.sandbox.stub(impl, 'mutateElement');
     attemptChangeHeightStub.returns(Promise.resolve());
     mutateElementStub.returns(Promise.resolve());
-    sandbox.stub(impl, 'attemptToRenderCreative').returns(Promise.resolve());
+    env.sandbox
+      .stub(impl, 'attemptToRenderCreative')
+      .returns(Promise.resolve());
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
-    const setCssPositionSpy = sandbox.spy(impl, 'setCssPosition_');
+    const setCssPositionSpy = env.sandbox.spy(impl, 'setCssPosition_');
     return impl.expandFluidCreative_().then(() => {
       expect(attemptChangeHeightStub).to.be.calledOnce;
       expect(setCssPositionSpy.withArgs('static')).to.be.calledOnce;
@@ -386,15 +398,20 @@ describes.realWin('DoubleClick Fast Fetch Fluid', realWinConfig, env => {
   it('should set position: absoltute back when resizing fails', () => {
     impl.iframe = impl.win.document.createElement('iframe');
     impl.win.document.body.appendChild(impl.iframe);
-    const attemptChangeHeightStub = sandbox.stub(impl, 'attemptChangeHeight');
-    const mutateElementStub = sandbox.stub(impl, 'mutateElement');
+    const attemptChangeHeightStub = env.sandbox.stub(
+      impl,
+      'attemptChangeHeight'
+    );
+    const mutateElementStub = env.sandbox.stub(impl, 'mutateElement');
     attemptChangeHeightStub.returns(Promise.reject());
     mutateElementStub.returns(Promise.resolve());
-    sandbox.stub(impl, 'attemptToRenderCreative').returns(Promise.resolve());
+    env.sandbox
+      .stub(impl, 'attemptToRenderCreative')
+      .returns(Promise.resolve());
     impl.buildCallback();
     impl.isFluidRequest_ = true;
     impl.isVerifiedAmpCreative_ = true;
-    const setCssPositionSpy = sandbox.spy(impl, 'setCssPosition_');
+    const setCssPositionSpy = env.sandbox.spy(impl, 'setCssPosition_');
     return impl.expandFluidCreative_().then(() => {
       expect(attemptChangeHeightStub).to.be.calledOnce;
       expect(setCssPositionSpy.withArgs('static')).to.be.calledOnce;

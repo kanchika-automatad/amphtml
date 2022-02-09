@@ -1,18 +1,5 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {toArray} from '#core/types/array';
+
 import {
   LoadTask,
   MuteTask,
@@ -25,31 +12,28 @@ import {
   UpdateSourcesTask,
 } from '../media-tasks';
 import {Sources} from '../sources';
-import {toArray} from '../../../../src/types';
 
-describes.realWin('media-tasks', {}, env => {
+describes.realWin('media-tasks', {}, (env) => {
   let win;
-  let sandbox;
   let el;
   let vsyncApi;
 
   beforeEach(() => {
     win = env.win;
-    sandbox = sinon.sandbox;
     el = document.createElement('video');
 
     // Mock vsync
     vsyncApi = {
       mutatePromise: () => {},
     };
-    sandbox.stub(vsyncApi, 'mutatePromise').resolves(callback => {
+    env.sandbox.stub(vsyncApi, 'mutatePromise').resolves((callback) => {
       callback();
     });
   });
 
   describe('PauseTask', () => {
     it('should call pause()', () => {
-      const pause = sandbox.spy(el, 'pause');
+      const pause = env.sandbox.spy(el, 'pause');
       const task = new PauseTask();
       task.execute(el);
       expect(pause).to.have.been.called;
@@ -60,7 +44,7 @@ describes.realWin('media-tasks', {}, env => {
     it('should call play() if element was not yet playing', () => {
       expect(el.paused).to.be.true;
 
-      const play = sandbox.spy(el, 'play');
+      const play = env.sandbox.spy(el, 'play');
       const task = new PlayTask();
       task.execute(el);
       expect(play).to.have.been.called;
@@ -70,7 +54,7 @@ describes.realWin('media-tasks', {}, env => {
       el.play();
       expect(el.paused).to.be.false;
 
-      const play = sandbox.spy(el, 'play');
+      const play = env.sandbox.spy(el, 'play');
       const task = new PlayTask();
       task.execute(el);
       expect(play).not.to.have.been.called;
@@ -101,7 +85,7 @@ describes.realWin('media-tasks', {}, env => {
 
   describe('LoadTask', () => {
     it('should call load()', () => {
-      const load = sandbox.spy(el, 'load');
+      const load = env.sandbox.spy(el, 'load');
       const task = new LoadTask();
       task.execute(el);
       expect(load).to.have.been.called;
@@ -152,7 +136,7 @@ describes.realWin('media-tasks', {}, env => {
      * @return {!Array<!Element>}
      */
     function getFakeSources(indices) {
-      return indices.map(index => getFakeSource(index));
+      return indices.map((index) => getFakeSource(index));
     }
 
     it('should clear existing src attribute', () => {
@@ -169,7 +153,7 @@ describes.realWin('media-tasks', {}, env => {
 
     it('should clear existing source elements', () => {
       const OLD_SRC_ELS = getFakeSources([1, 2, 3]);
-      OLD_SRC_ELS.forEach(source => {
+      OLD_SRC_ELS.forEach((source) => {
         el.appendChild(source);
       });
 
@@ -198,7 +182,7 @@ describes.realWin('media-tasks', {}, env => {
       const OLD_SRC_ELS = getFakeSources([1, 2, 3]);
       const NEW_SRC_ELS = getFakeSources([4, 5, 6]);
 
-      OLD_SRC_ELS.forEach(source => {
+      OLD_SRC_ELS.forEach((source) => {
         el.appendChild(source);
       });
 
@@ -235,7 +219,7 @@ describes.realWin('media-tasks', {}, env => {
 
     it('should drop sources if a src attribute is specified', () => {
       el.setAttribute('src', './foo.mp4');
-      getFakeSources([1, 2, 3]).forEach(source => {
+      getFakeSources([1, 2, 3]).forEach((source) => {
         el.appendChild(source);
       });
       const newSources = Sources.removeFrom(win, el);

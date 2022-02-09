@@ -1,28 +1,33 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {getValueForExpr} from '#core/types/object';
 
-import {Services} from './services';
+import {Services} from '#service';
+
+import {user} from '#utils/log';
+
 import {assertHttpsUrl} from './url';
-import {getValueForExpr} from './json';
-import {user} from './log';
+
+/**
+ * Detail of each `options` property:
+ * expr - Dot-syntax reference to subdata of JSON result to return. If not specified,
+ *     entire JSON result is returned.
+ * urlReplacement - If ALL, replaces all URL vars. If OPT_IN, replaces allowlisted
+ *     URL vars. Otherwise, don't expand.
+ * refresh - Forces refresh of browser cache.
+ * xssiPrefix - Prefix to optionally strip from the response before calling parseJson.
+ *
+ * @typedef {{
+ *  expr:(string|undefined),
+ *  urlReplacement: (UrlReplacementPolicy_Enum|undefined),
+ *  refresh: (boolean|undefined),
+ *  xssiPrefix: (string|undefined),
+ * }}
+ */
+export let BatchFetchOptionsDef;
 
 /**
  * @enum {number}
  */
-export const UrlReplacementPolicy = {
+export const UrlReplacementPolicy_Enum = {
   NONE: 0,
   OPT_IN: 1,
   ALL: 2,
@@ -35,46 +40,31 @@ export const UrlReplacementPolicy = {
  *
  * @param {!./service/ampdoc-impl.AmpDoc} ampdoc
  * @param {!Element} element
- * @param {string=} opt_expr Dot-syntax reference to subdata of JSON result
- *     to return. If not specified, entire JSON result is returned.
- * @param {UrlReplacementPolicy=} opt_urlReplacement If ALL, replaces all URL
- *     vars. If OPT_IN, replaces whitelisted URL vars. Otherwise, don't expand..
- * @param {boolean=} opt_refresh Forces refresh of browser cache.
- * @param {string=} opt_token Auth token that forces a POST request.
+ * @param {!BatchFetchOptionsDef} options options bag for modifying the request.
  * @return {!Promise<!JsonObject|!Array<JsonObject>>} Resolved with JSON
  *     result or rejected if response is invalid.
  */
-export function batchFetchJsonFor(
-  ampdoc,
-  element,
-  opt_expr = '.',
-  opt_urlReplacement = UrlReplacementPolicy.NONE,
-  opt_refresh = false,
-  opt_token = undefined
-) {
+export function batchFetchJsonFor(ampdoc, element, options = {}) {
+  const {
+    expr = '.',
+    urlReplacement = UrlReplacementPolicy_Enum.NONE,
+    refresh = false,
+    xssiPrefix = undefined,
+  } = options;
   assertHttpsUrl(element.getAttribute('src'), element);
   const xhr = Services.batchedXhrFor(ampdoc.win);
-  return requestForBatchFetch(element, opt_urlReplacement, opt_refresh)
-    .then(data => {
-      if (opt_token !== undefined) {
-        data.fetchOpt['method'] = 'POST';
-        data.fetchOpt['headers'] = {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        };
-        data.fetchOpt['body'] = {
-          'ampViewerAuthToken': opt_token,
-        };
-      }
+  return requestForBatchFetch(element, urlReplacement, refresh)
+    .then((data) => {
       return xhr.fetchJson(data.xhrUrl, data.fetchOpt);
     })
-    .then(res => res.json())
-    .then(data => {
+    .then((res) => Services.xhrFor(ampdoc.win).xssiJson(res, xssiPrefix))
+    .then((data) => {
       if (data == null) {
         throw new Error('Response is undefined.');
       }
-      return getValueForExpr(data, opt_expr || '.');
+      return getValueForExpr(data, expr || '.');
     })
-    .catch(err => {
+    .catch((err) => {
       throw user().createError('failed fetching JSON data', err);
     });
 }
@@ -83,8 +73,8 @@ export function batchFetchJsonFor(
  * Handles url replacement and constructs the FetchInitJsonDef required for a
  * fetch.
  * @param {!Element} element
- * @param {!UrlReplacementPolicy} replacement If ALL, replaces all URL
- *     vars. If OPT_IN, replaces whitelisted URL vars. Otherwise, don't expand.
+ * @param {!UrlReplacementPolicy_Enum} replacement If ALL, replaces all URL
+ *     vars. If OPT_IN, replaces allowlisted URL vars. Otherwise, don't expand.
  * @param {boolean} refresh Forces refresh of browser cache.
  * @return {!Promise<!FetchRequestDef>}
  */
@@ -94,15 +84,15 @@ export function requestForBatchFetch(element, replacement, refresh) {
   // Replace vars in URL if desired.
   const urlReplacements = Services.urlReplacementsForDoc(element);
   const promise =
-    replacement >= UrlReplacementPolicy.OPT_IN
+    replacement >= UrlReplacementPolicy_Enum.OPT_IN
       ? urlReplacements.expandUrlAsync(url)
       : Promise.resolve(url);
 
-  return promise.then(xhrUrl => {
+  return promise.then((xhrUrl) => {
     // Throw user error if this element is performing URL substitutions
     // without the soon-to-be-required opt-in (#12498).
-    if (replacement == UrlReplacementPolicy.OPT_IN) {
-      const invalid = urlReplacements.collectUnwhitelistedVarsSync(element);
+    if (replacement == UrlReplacementPolicy_Enum.OPT_IN) {
+      const invalid = urlReplacements.collectDisallowedVarsSync(element);
       if (invalid.length > 0) {
         throw user().createError(
           'URL variable substitutions in CORS ' +

@@ -1,22 +1,5 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {CONFIGURATION_EVENT, ORIGIN} from './constants';
 import {getAddThisMode} from './addthis-utils/mode';
-
-import {dict} from '../../../src/utils/object';
+import {CONFIGURATION_EVENT, ORIGIN} from './constants';
 
 /**
  * Configuration request status enum.
@@ -76,7 +59,7 @@ export class ConfigManager {
     const source = data['source'];
     // Check that the configuration event is coming from an iframe that
     // should be providing configuration information.
-    const isProviderIframe = this.configProviderIframes_.some(iframe => {
+    const isProviderIframe = this.configProviderIframes_.some((iframe) => {
       return iframe.contentWindow === source;
     });
 
@@ -89,14 +72,14 @@ export class ConfigManager {
     pubData.requestStatus = RequestStatus.COMPLETED;
     const {iframeData} = pubData;
 
-    iframeData.forEach(iframeDatum => {
+    iframeData.forEach((iframeDatum) => {
       const {
-        iframe,
-        widgetId,
-        shareConfig,
         atConfig,
-        productCode,
         containerClassName,
+        iframe,
+        productCode,
+        shareConfig,
+        widgetId,
       } = iframeDatum;
       this.sendConfiguration_({
         iframe,
@@ -111,31 +94,35 @@ export class ConfigManager {
   }
 
   /**
-   * @param {!Object} input
-   * @param {*} [input.iframe]
-   * @param {string} [input.widgetId]
-   * @param {string} [input.pubId]
-   * @param {!Object} [input.shareConfig]
-   * @param {!Object} [input.atConfig]
-   * @param {string} [input.productCode]
-   * @param {string} [input.containerClassName]
+   * @typedef {{
+   *  iframe: *,
+   *  widgetId: string,
+   *  pubId: string,
+   *  shareConfig: !Object,
+   *  atConfig: !Object,
+   *  productCode: string,
+   *  containerClassName: string,
+   * }} SendConfigurationInput
+   */
+
+  /**
+   * @param {!SendConfigurationInput} input
    * @private
    */
-  sendConfiguration_({
-    iframe,
-    widgetId,
-    pubId,
-    shareConfig,
-    atConfig,
-    productCode,
-    containerClassName,
-  }) {
-    const pubData = this.dataForPubId_[pubId];
+  sendConfiguration_(input) {
     const {
-      config: dashboardConfig,
-      requestStatus: configRequestStatus,
-    } = pubData;
-    const jsonToSend = dict({
+      atConfig,
+      containerClassName,
+      iframe,
+      productCode,
+      pubId,
+      shareConfig,
+      widgetId,
+    } = input;
+    const pubData = this.dataForPubId_[pubId];
+    const {config: dashboardConfig, requestStatus: configRequestStatus} =
+      pubData;
+    const jsonToSend = {
       'event': CONFIGURATION_EVENT,
       'shareConfig': shareConfig,
       'atConfig': atConfig,
@@ -145,7 +132,7 @@ export class ConfigManager {
       'containerClassName': containerClassName,
       'configRequestStatus': configRequestStatus,
       'dashboardConfig': dashboardConfig,
-    });
+    };
 
     if (
       dashboardConfig &&
@@ -192,28 +179,29 @@ export class ConfigManager {
    * Register relevant data with the configuration manager and prepare
    * request/response cycle between frames.
    * @param {{
-   * pubId: string,
-   * activeToolsMonitor: Object<string,string>,
-   * atConfig: Object<string,string>,
-   * widgetId: string,
-   * containerClassName: string,
-   * productCode: string,
-   * iframe: !Element,
-   * iframeLoadPromise: !Promise,
-   * shareConfig: (JsonObject|undefined)
-   * }} _
+   *   pubId: string,
+   *   activeToolsMonitor: Object<string,string>,
+   *   atConfig: Object<string,string>,
+   *   widgetId: string,
+   *   containerClassName: string,
+   *   productCode: string,
+   *   iframe: !Element,
+   *   iframeLoadPromise: !Promise,
+   *   shareConfig: (JsonObject|undefined)
+   * }} config
    */
-  register({
-    pubId,
-    widgetId,
-    productCode,
-    containerClassName,
-    iframe,
-    iframeLoadPromise,
-    shareConfig,
-    atConfig,
-    activeToolsMonitor,
-  }) {
+  register(config) {
+    const {
+      activeToolsMonitor,
+      atConfig,
+      containerClassName,
+      iframe,
+      iframeLoadPromise,
+      productCode,
+      pubId,
+      shareConfig,
+      widgetId,
+    } = config;
     if (!this.activeToolsMonitor_) {
       this.activeToolsMonitor_ = activeToolsMonitor;
     }
@@ -258,15 +246,16 @@ export class ConfigManager {
    * Relinquish as many element references as possible.
    * @param {{pubId:string, iframe:Element}} param
    */
-  unregister({pubId, iframe}) {
+  unregister(param) {
+    const {iframe, pubId} = param;
     this.configProviderIframes_ = this.configProviderIframes_.filter(
-      providerFrame => providerFrame !== iframe
+      (providerFrame) => providerFrame !== iframe
     );
 
     const pubData = this.dataForPubId_[pubId] || {};
 
     if (pubData.iframeData) {
-      pubData.iframeData = pubData.iframeData.filter(iframeDatum => {
+      pubData.iframeData = pubData.iframeData.filter((iframeDatum) => {
         return iframeDatum.iframe !== iframe;
       });
     }

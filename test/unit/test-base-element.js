@@ -1,29 +1,16 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {DEFAULT_ACTION} from '#core/constants/action-constants';
+import {LayoutPriority_Enum} from '#core/dom/layout';
+import {layoutRectLtwh} from '#core/dom/layout/rect';
+
+import {Services} from '#service';
+import {Resource} from '#service/resource';
+
+import {listenOncePromise} from '#utils/event-helper';
 
 import {BaseElement} from '../../src/base-element';
-import {DEFAULT_ACTION} from '../../src/action-constants';
-import {LayoutPriority} from '../../src/layout';
-import {Resource} from '../../src/service/resource';
-import {Services} from '../../src/services';
 import {createAmpElementForTesting} from '../../src/custom-element';
-import {layoutRectLtwh} from '../../src/layout-rect';
-import {listenOncePromise} from '../../src/event-helper';
 
-describes.realWin('BaseElement', {amp: true}, env => {
+describes.realWin('BaseElement', {amp: true}, (env) => {
   let win, doc;
   let customElement;
   let element;
@@ -33,7 +20,7 @@ describes.realWin('BaseElement', {amp: true}, env => {
     doc = win.document;
     win.customElements.define(
       'amp-test-element',
-      createAmpElementForTesting(win, 'amp-test-element', BaseElement)
+      createAmpElementForTesting(win, BaseElement)
     );
     customElement = doc.createElement('amp-test-element');
     element = new BaseElement(customElement);
@@ -42,43 +29,12 @@ describes.realWin('BaseElement', {amp: true}, env => {
   it('should delegate update priority to resources', () => {
     const resources = win.__AMP_SERVICES.resources.obj;
     customElement.getResources = () => resources;
-    const updateLayoutPriorityStub = sandbox.stub(
+    const updateLayoutPriorityStub = env.sandbox.stub(
       resources,
       'updateLayoutPriority'
     );
-    element.updateLayoutPriority(LayoutPriority.METADATA);
+    element.updateLayoutPriority(LayoutPriority_Enum.METADATA);
     expect(updateLayoutPriorityStub).to.be.calledOnce;
-  });
-
-  it('propagateAttributes - niente', () => {
-    const target = doc.createElement('div');
-    expect(target.hasAttributes()).to.be.false;
-
-    element.propagateAttributes(['data-test1'], target);
-    expect(target.hasAttributes()).to.be.false;
-
-    element.propagateAttributes(['data-test2', 'data-test3'], target);
-    expect(target.hasAttributes()).to.be.false;
-  });
-
-  it('propagateAttributes', () => {
-    const target = doc.createElement('div');
-    expect(target.hasAttributes()).to.be.false;
-
-    customElement.setAttribute('data-test1', 'abc');
-    customElement.setAttribute('data-test2', 'xyz');
-    customElement.setAttribute('data-test3', '123');
-
-    element.propagateAttributes('data-test1', target);
-    expect(target.hasAttributes()).to.be.true;
-
-    expect(target.getAttribute('data-test1')).to.equal('abc');
-    expect(target.getAttribute('data-test2')).to.be.null;
-    expect(target.getAttribute('data-test3')).to.be.null;
-
-    element.propagateAttributes(['data-test2', 'data-test3'], target);
-    expect(target.getAttribute('data-test2')).to.equal('xyz');
-    expect(target.getAttribute('data-test3')).to.equal('123');
   });
 
   it('should register action', () => {
@@ -106,7 +62,7 @@ describes.realWin('BaseElement', {amp: true}, env => {
   });
 
   it('should execute registered action', () => {
-    const handler = sandbox.spy();
+    const handler = env.sandbox.spy();
     element.registerAction('method1', handler);
     const invocation = {method: 'method1', satisfiesTrust: () => true};
     element.executeAction(invocation, null, false);
@@ -114,7 +70,7 @@ describes.realWin('BaseElement', {amp: true}, env => {
   });
 
   it('should execute default method by "activate"', () => {
-    const handler = sandbox.spy();
+    const handler = env.sandbox.spy();
     element.registerDefaultAction(handler);
     const invocation = {method: DEFAULT_ACTION, satisfiesTrust: () => true};
     element.executeAction(invocation, null, false);
@@ -122,8 +78,8 @@ describes.realWin('BaseElement', {amp: true}, env => {
   });
 
   it('should not allow two default actions', () => {
-    const handler = sandbox.spy();
-    const anotherHandler = sandbox.spy();
+    const handler = env.sandbox.spy();
+    const anotherHandler = env.sandbox.spy();
     element.registerDefaultAction(handler);
     return allowConsoleError(() => {
       expect(() => {
@@ -133,7 +89,7 @@ describes.realWin('BaseElement', {amp: true}, env => {
   });
 
   it('should check trust before invocation', () => {
-    const handler = sandbox.spy();
+    const handler = env.sandbox.spy();
     const minTrust = 100;
     element.foo = () => {};
     element.registerDefaultAction(handler, 'foo', minTrust);
@@ -151,7 +107,7 @@ describes.realWin('BaseElement', {amp: true}, env => {
     element.executeAction(
       {
         method: 'foo',
-        satisfiesTrust: t => t == minTrust,
+        satisfiesTrust: (t) => t == minTrust,
       },
       null,
       false
@@ -174,18 +130,14 @@ describes.realWin('BaseElement', {amp: true}, env => {
     const resources = win.__AMP_SERVICES.resources.obj;
     customElement.getResources = () => resources;
     const resource = new Resource(1, customElement, resources);
-    sandbox
+    env.sandbox
       .stub(resources, 'getResourceForElement')
       .withArgs(customElement)
       .returns(resource);
     const layoutBox = layoutRectLtwh(0, 50, 100, 200);
-    const pageLayoutBox = layoutRectLtwh(0, 0, 100, 200);
-    sandbox.stub(resource, 'getLayoutBox').callsFake(() => layoutBox);
-    sandbox.stub(resource, 'getPageLayoutBox').callsFake(() => pageLayoutBox);
+    env.sandbox.stub(resource, 'getLayoutBox').callsFake(() => layoutBox);
     expect(element.getLayoutBox()).to.eql(layoutBox);
     expect(customElement.getLayoutBox()).to.eql(layoutBox);
-    expect(element.getPageLayoutBox()).to.eql(pageLayoutBox);
-    expect(customElement.getPageLayoutBox()).to.eql(pageLayoutBox);
   });
 
   it('should return true for inabox experiment renderOutsideViewport', () => {

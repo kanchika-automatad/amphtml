@@ -1,43 +1,22 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
 
 import {Poller} from '../poller';
-import {Services} from '../../../../src/services';
 
-describe('Poller', () => {
-  let sandbox;
+describes.sandboxed('Poller', {}, (env) => {
   let clock;
   let poller;
   let workStub;
   const timer = Services.timerFor(window);
 
   beforeEach(() => {
-    sandbox = sinon.sandbox;
-    clock = sandbox.useFakeTimers();
+    clock = env.sandbox.useFakeTimers();
     const obj = {
       work() {},
     };
-    workStub = sandbox.stub(obj, 'work');
-    sandbox.stub(Math, 'random').callsFake(() => 1);
+    workStub = env.sandbox.stub(obj, 'work');
+    env.sandbox.stub(Math, 'random').callsFake(() => 1);
     const wait = 5000;
     poller = new Poller(window, wait, workStub);
-  });
-
-  afterEach(() => {
-    sandbox.restore();
   });
 
   it('should be initialized in stopped state', () => {
@@ -249,13 +228,13 @@ describe('Poller', () => {
   });
 
   it('should clear timeout ids if stopped', () => {
-    const delaySpy = sandbox.spy(timer, 'delay');
+    const delaySpy = env.sandbox.spy(timer, 'delay');
     const retriableErr = new Error('HTTP Error');
     retriableErr.retriable = true;
     workStub.onCall(0).returns(Promise.reject(retriableErr));
     workStub.onCall(1).returns(Promise.reject(retriableErr));
     workStub.returns(Promise.resolve());
-    const clearSpy = sandbox.spy(timer, 'cancel');
+    const clearSpy = env.sandbox.spy(timer, 'cancel');
 
     expect(poller.lastTimeoutId_).to.be.null;
 

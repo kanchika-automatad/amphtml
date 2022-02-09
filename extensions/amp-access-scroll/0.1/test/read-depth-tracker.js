@@ -1,18 +1,3 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 import {AccessSource} from '../../../amp-access/0.1/amp-access-source';
 import {ReadDepthTracker} from '../read-depth-tracker';
 
@@ -23,11 +8,10 @@ describes.realWin(
       extensions: ['amp-access-scroll'],
     },
   },
-  env => {
+  (env) => {
     let win;
     let doc;
     let ampdoc;
-    let sandbox;
     let accessSource;
     let readDepthTracker;
 
@@ -35,7 +19,6 @@ describes.realWin(
       win = env.win;
       doc = win.document;
       ampdoc = env.ampdoc;
-      sandbox = env.sandbox;
 
       // Undefined initialization params for AccessSource
       let scheduleViewFn, onReauthorizeFn;
@@ -69,12 +52,12 @@ describes.realWin(
       );
 
       // Stub viewport to fake paragraph positions
-      sandbox
+      env.sandbox
         .stub(readDepthTracker.viewport_, 'getClientRectAsync')
         .callsFake(returnRectPosition);
 
       // Stub updateLastRead_ call to check content sent
-      sandbox.stub(readDepthTracker, 'updateLastRead_');
+      env.sandbox.stub(readDepthTracker, 'updateLastRead_');
     });
 
     function returnRectPosition(paragraph) {

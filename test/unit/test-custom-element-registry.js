@@ -1,22 +1,7 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes} from '#core/dom';
 
-import {AmpDocSingle} from '../../src/service/ampdoc-impl';
-import {BaseElement} from '../../src/base-element';
-import {ElementStub} from '../../src/element-stub';
+import {Services} from '#service';
+import {AmpDocSingle} from '#service/ampdoc-impl';
 import {
   copyElementToChildWindow,
   getElementClassForTesting,
@@ -25,11 +10,22 @@ import {
   stubElementIfNotKnown,
   stubElementsForDoc,
   upgradeOrRegisterElement,
-} from '../../src/service/custom-element-registry';
-import {createElementWithAttributes} from '../../src/dom';
+} from '#service/custom-element-registry';
 
-describes.realWin('CustomElement register', {amp: true}, env => {
+import {FakePerformance} from '#testing/fake-dom';
+
+import {BaseElement} from '../../src/base-element';
+import {getImplSyncForTesting} from '../../src/custom-element';
+import {ElementStub} from '../../src/element-stub';
+
+describes.realWin('CustomElement register', {amp: true}, (env) => {
   class ConcreteElement extends BaseElement {}
+
+  class ConcreteElementWithShadow extends BaseElement {
+    static requiresShadowDom() {
+      return true;
+    }
+  }
 
   let win, doc, ampdoc, extensions;
 
@@ -38,7 +34,7 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     doc = win.document;
     ampdoc = env.ampdoc;
     extensions = env.extensions;
-    ampdoc.declareExtension('amp-element1');
+    ampdoc.declareExtension('amp-element1', '0.2');
   });
 
   function insertElement(name) {
@@ -53,6 +49,47 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     doc.body.appendChild(testElement);
   }
 
+  it('should register a new class immediately if no need to wait', () => {
+    upgradeOrRegisterElement(win, 'amp-element1', ConcreteElement);
+    expect(getElementClassForTesting(win, 'amp-element1')).to.equal(
+      ConcreteElement
+    );
+  });
+
+  it('should register a new class immediately for requiresShadowDom if no polyfilling needed', () => {
+    if (!win.Element.prototype.attachShadow) {
+      win.Element.prototype.attachShadow = () => {};
+    }
+    upgradeOrRegisterElement(win, 'amp-element1', ConcreteElementWithShadow);
+    expect(getElementClassForTesting(win, 'amp-element1')).to.equal(
+      ConcreteElementWithShadow
+    );
+  });
+
+  it('should wait for the shadow DOM polyfill before registering a class', async () => {
+    if (win.Element.prototype.attachShadow) {
+      delete win.Element.prototype.attachShadow;
+    }
+    const extensions = Services.extensionsFor(win);
+    const extensionsMock = env.sandbox.mock(extensions);
+    const polyfillPromise = Promise.resolve();
+    extensionsMock
+      .expects('importUnwrapped')
+      .withExactArgs(win, 'amp-shadow-dom-polyfill')
+      .returns(polyfillPromise)
+      .once();
+
+    upgradeOrRegisterElement(win, 'amp-element1', ConcreteElementWithShadow);
+    expect(getElementClassForTesting(win, 'amp-element1')).to.not.exist;
+
+    // Resolve polyfill.
+    await polyfillPromise;
+    expect(getElementClassForTesting(win, 'amp-element1')).to.equal(
+      ConcreteElementWithShadow
+    );
+    extensionsMock.verify();
+  });
+
   it('should go through stub/upgrade cycle', () => {
     registerElement(win, 'amp-element1', ElementStub);
     expect(getElementClassForTesting(win, 'amp-element1')).to.equal(
@@ -63,19 +100,46 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     const element1 = doc.createElement('amp-element1');
     element1.setAttribute('layout', 'nodisplay');
     doc.body.appendChild(element1);
-    expect(element1.implementation_).to.be.instanceOf(ElementStub);
+    expect(getImplSyncForTesting(element1)).to.be.null;
 
     // Post-download, elements are upgraded.
     upgradeOrRegisterElement(win, 'amp-element1', ConcreteElement);
     expect(getElementClassForTesting(win, 'amp-element1')).to.equal(
       ConcreteElement
     );
-    expect(element1.implementation_).to.be.instanceOf(ConcreteElement);
+    expect(getImplSyncForTesting(element1)).to.be.instanceOf(ConcreteElement);
 
     // Elements created post-download and immediately upgraded.
     const element2 = doc.createElement('amp-element1');
-    doc.body.appendChild(element1);
-    expect(element2.implementation_).to.be.instanceOf(ConcreteElement);
+    element2.setAttribute('layout', 'nodisplay');
+    doc.body.appendChild(element2);
+    expect(getImplSyncForTesting(element2)).to.be.instanceOf(ConcreteElement);
+  });
+
+  it('should only set extensionsKnown when body is available', () => {
+    const head = document.createElement('fake-head');
+    const script = document.createElement('script');
+    script.setAttribute('custom-element', 'amp-element2');
+    Object.defineProperty(script, 'src', {
+      value: 'https://cdn.ampproject.org/v0/amp-element2-0.2.js',
+    });
+    head.appendChild(script);
+    env.sandbox.stub(ampdoc, 'getHeadNode').returns(head);
+    env.sandbox.stub(ampdoc, 'setExtensionsKnown');
+    const isBodyAvailableStub = env.sandbox.stub(ampdoc, 'isBodyAvailable');
+
+    // Body is not available.
+    isBodyAvailableStub.returns(false);
+    stubElementsForDoc(ampdoc);
+    expect(ampdoc.declaresExtension('amp-element2')).to.be.true;
+    expect(ampdoc.declaresExtension('amp-element2', '0.2')).to.be.true;
+    expect(ampdoc.setExtensionsKnown).to.not.be.called;
+
+    // Body is not available.
+    isBodyAvailableStub.returns(true);
+    stubElementsForDoc(ampdoc);
+    expect(ampdoc.declaresExtension('amp-element2')).to.be.true;
+    expect(ampdoc.setExtensionsKnown).to.be.calledOnce;
   });
 
   it('should mark stubbed element as declared', () => {
@@ -84,16 +148,20 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     const head = document.createElement('fake-head');
     const script = document.createElement('script');
     script.setAttribute('custom-element', 'amp-element2');
+    Object.defineProperty(script, 'src', {
+      value: 'https://cdn.ampproject.org/v0/amp-element2-0.2.js',
+    });
     head.appendChild(script);
-    sandbox.stub(ampdoc, 'getHeadNode').callsFake(() => head);
+    env.sandbox.stub(ampdoc, 'getHeadNode').callsFake(() => head);
 
     stubElementsForDoc(ampdoc);
     expect(ampdoc.declaresExtension('amp-element2')).to.be.true;
+    expect(ampdoc.declaresExtension('amp-element2', '0.2')).to.be.true;
     expect(win.__AMP_EXTENDED_ELEMENTS['amp-element2']).to.equal(ElementStub);
   });
 
   it('should install pre-stubbed element extension', () => {
-    const stub = sandbox.stub(extensions, 'installExtensionForDoc');
+    const stub = env.sandbox.stub(extensions, 'installExtensionForDoc');
 
     stubElementIfNotKnown(win, 'amp-element2');
     expect(win.__AMP_EXTENDED_ELEMENTS['amp-element2']).to.equal(ElementStub);
@@ -103,12 +171,12 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     const element = doc.createElement('amp-element2');
     doc.body.appendChild(element);
     expect(stub).to.be.calledOnce;
-    expect(stub).to.be.calledWithExactly(ampdoc, 'amp-element2');
+    expect(stub).to.be.calledWithExactly(ampdoc, 'amp-element2', '0.1');
   });
 
   it('should not install declared pre-stubbed element extension', () => {
-    ampdoc.declareExtension('amp-element2');
-    const stub = sandbox.stub(extensions, 'installExtensionForDoc');
+    ampdoc.declareExtension('amp-element2', '0.2');
+    const stub = env.sandbox.stub(extensions, 'installExtensionForDoc');
 
     stubElementIfNotKnown(win, 'amp-element2');
     expect(win.__AMP_EXTENDED_ELEMENTS['amp-element2']).to.equal(ElementStub);
@@ -116,12 +184,13 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     expect(stub).to.not.be.called;
 
     const element = doc.createElement('amp-element2');
+    element.setAttribute('layout', 'nodisplay');
     doc.body.appendChild(element);
     expect(stub).to.not.be.called;
   });
 
   it('should not install declared pre-installed element', () => {
-    const stub = sandbox.stub(extensions, 'installExtensionForDoc');
+    const stub = env.sandbox.stub(extensions, 'installExtensionForDoc');
 
     registerElement(win, 'amp-element1', ConcreteElement);
     expect(win.__AMP_EXTENDED_ELEMENTS['amp-element1']).to.equal(
@@ -131,6 +200,7 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     expect(stub).to.not.be.called;
 
     const element = doc.createElement('amp-element1');
+    element.setAttribute('layout', 'nodisplay');
     doc.body.appendChild(element);
     expect(stub).to.not.be.called;
   });
@@ -175,7 +245,7 @@ describes.realWin('CustomElement register', {amp: true}, env => {
         },
         head: {
           nodeType: /* ELEMENT */ 1,
-          querySelectorAll: selector => {
+          querySelectorAll: (selector) => {
             if (selector == 'script[custom-element],script[custom-template]') {
               return elements;
             }
@@ -186,11 +256,16 @@ describes.realWin('CustomElement register', {amp: true}, env => {
       };
 
       elem1 = {
-        getAttribute: name => {
+        getAttribute(name) {
           if (name == 'custom-element') {
             return 'amp-test1';
           }
         },
+        hasAttribute(name) {
+          return name == 'custom-element' || name == 'src';
+        },
+        addEventListener() {},
+        src: 'https://cdn.ampproject.org/v0/amp-test1-0.2.js',
         ownerDocument: doc,
       };
       elements.push(elem1);
@@ -198,13 +273,14 @@ describes.realWin('CustomElement register', {amp: true}, env => {
       win = {
         document: doc,
         customElements: {
-          define: sandbox.spy(),
+          define: env.sandbox.spy(),
         },
         Object: {
-          create: proto => Object.create(proto),
+          create: (proto) => Object.create(proto),
         },
         HTMLElement,
         __AMP_EXTENDED_ELEMENTS: {},
+        performance: new FakePerformance(window),
       };
       doc.defaultView = win;
 
@@ -224,6 +300,10 @@ describes.realWin('CustomElement register', {amp: true}, env => {
       expect(win.__AMP_EXTENDED_ELEMENTS['amp-test2']).to.be.undefined;
       expect(win.customElements.define).to.be.calledOnce;
       expect(win.customElements.define.firstCall.args[0]).to.equal('amp-test1');
+
+      expect(ampdoc.declaresExtension('amp-test1')).to.be.true;
+      expect(ampdoc.declaresExtension('amp-test1', '0.2')).to.be.true;
+      expect(ampdoc.declaresExtension('amp-test2')).to.be.false;
     });
 
     it('should repeat stubbing when body is not available', () => {
@@ -236,14 +316,22 @@ describes.realWin('CustomElement register', {amp: true}, env => {
       expect(win.__AMP_EXTENDED_ELEMENTS['amp-test2']).to.be.undefined;
       expect(win.customElements.define).to.be.calledOnce;
       expect(win.customElements.define.firstCall.args[0]).to.equal('amp-test1');
+      expect(ampdoc.declaresExtension('amp-test1')).to.be.true;
+      expect(ampdoc.declaresExtension('amp-test1', '0.2')).to.be.true;
+      expect(ampdoc.declaresExtension('amp-test2')).to.be.false;
 
       // Add more elements
       const elem2 = {
-        getAttribute: name => {
+        getAttribute(name) {
           if (name == 'custom-element') {
             return 'amp-test2';
           }
         },
+        hasAttribute(name) {
+          return name == 'custom-element' || name == 'src';
+        },
+        addEventListener() {},
+        src: 'https://cdn.ampproject.org/v0/amp-test2-0.3.js',
         ownerDocument: doc,
       };
       elements.push(elem2);
@@ -257,6 +345,8 @@ describes.realWin('CustomElement register', {amp: true}, env => {
       expect(win.customElements.define.getCall(1).args[0]).to.equal(
         'amp-test2'
       );
+      expect(ampdoc.declaresExtension('amp-test2')).to.be.true;
+      expect(ampdoc.declaresExtension('amp-test2', '0.3')).to.be.true;
     });
 
     it('should stub element when not stubbed yet', () => {
@@ -276,7 +366,7 @@ describes.realWin('CustomElement register', {amp: true}, env => {
     it('should copy or stub element definitions in a child window', () => {
       stubElementIfNotKnown(win, 'amp-test1');
 
-      const define = sandbox.spy();
+      const define = env.sandbox.spy();
       const childWin = {
         Object,
         HTMLElement,

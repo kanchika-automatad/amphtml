@@ -1,32 +1,15 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {ActionTrust_Enum} from '#core/constants/action-constants';
+import {tryFocus} from '#core/dom';
+import {Layout_Enum, getLayoutClass} from '#core/dom/layout';
+import {computedStyle, toggle} from '#core/dom/style';
+import {isFiniteNumber} from '#core/types';
+import {getWin} from '#core/window';
 
-import {ActionTrust} from '../action-constants';
-import {Layout, getLayoutClass} from '../layout';
-import {Services} from '../services';
-import {computedStyle, toggle} from '../style';
-import {dev, user, userAssert} from '../log';
-import {
-  getAmpdoc,
-  installServiceInEmbedScope,
-  registerServiceBuilderForDoc,
-} from '../service';
-import {isFiniteNumber, toWin} from '../types';
-import {startsWith} from '../string';
-import {tryFocus} from '../dom';
+import {Services} from '#service';
+
+import {dev, user, userAssert} from '#utils/log';
+
+import {getAmpdoc, registerServiceBuilderForDoc} from '../service-helpers';
 
 /**
  * @param {!Element} element
@@ -60,26 +43,20 @@ const AMP_CSS_RE = /^i-amphtml-/;
 /**
  * This service contains implementations of some of the most typical actions,
  * such as hiding DOM elements.
- * @implements {../service.EmbeddableService}
- * @private Visible for testing.
+ * @visibleForTesting
  */
 export class StandardActions {
   /**
    * @param {!./ampdoc-impl.AmpDoc} ampdoc
-   * @param {!Window=} opt_win
    */
-  constructor(ampdoc, opt_win) {
-    // TODO(#22733): remove subroooting once ampdoc-fie is launched.
-
+  constructor(ampdoc) {
     /** @const {!./ampdoc-impl.AmpDoc} */
     this.ampdoc = ampdoc;
 
-    const context = opt_win
-      ? opt_win.document.documentElement
-      : ampdoc.getHeadNode();
+    const context = ampdoc.getHeadNode();
 
-    /** @const @private {!./resources-interface.ResourcesInterface} */
-    this.resources_ = Services.resourcesForDoc(ampdoc);
+    /** @const @private {!./mutator-interface.MutatorInterface} */
+    this.mutator_ = Services.mutatorForDoc(ampdoc);
 
     /** @const @private {!./viewport/viewport-interface.ViewportInterface} */
     this.viewport_ = Services.viewportForDoc(ampdoc);
@@ -87,19 +64,8 @@ export class StandardActions {
     // Explicitly not setting `Action` as a member to scope installation to one
     // method and for bundle size savings. 💰
     this.installActions_(Services.actionServiceForDoc(context));
-  }
 
-  /**
-   * @param {!Window} embedWin
-   * @param {!./ampdoc-impl.AmpDoc} ampdoc
-   * @nocollapse
-   */
-  static installInEmbedWindow(embedWin, ampdoc) {
-    installServiceInEmbedScope(
-      embedWin,
-      'standard-actions',
-      new StandardActions(ampdoc, embedWin)
-    );
+    this.initThemeMode_();
   }
 
   /**
@@ -132,6 +98,47 @@ export class StandardActions {
       'toggleClass',
       this.handleToggleClass_.bind(this)
     );
+
+    actionService.addGlobalMethodHandler(
+      'toggleChecked',
+      this.handleToggleChecked_.bind(this)
+    );
+  }
+
+  /**
+   * Handles initiliazing the theme mode.
+   *
+   * This methode needs to be called on page load to set the `amp-dark-mode`
+   * class on the body if the user prefers the dark mode.
+   */
+  initThemeMode_() {
+    if (this.prefersDarkMode_()) {
+      this.ampdoc.waitForBodyOpen().then((body) => {
+        const darkModeClass =
+          body.getAttribute('data-prefers-dark-mode-class') || 'amp-dark-mode';
+
+        body.classList.add(darkModeClass);
+      });
+    }
+  }
+
+  /**
+   * Checks whether the user prefers dark mode based on local storage and
+   * user's operating systen settings.
+   *
+   * @return {boolean}
+   */
+  prefersDarkMode_() {
+    try {
+      const themeMode = this.ampdoc.win.localStorage.getItem('amp-dark-mode');
+
+      if (themeMode) {
+        return 'yes' === themeMode;
+      }
+    } catch (e) {}
+
+    // LocalStorage may not be accessible
+    return this.ampdoc.win.matchMedia?.('(prefers-color-scheme: dark)').matches;
   }
 
   /**
@@ -143,18 +150,20 @@ export class StandardActions {
    * @private Visible to tests only.
    */
   handleAmpTarget_(invocation) {
-    // All global `AMP` actions require high trust.
-    if (!invocation.satisfiesTrust(ActionTrust.HIGH)) {
+    // All global `AMP` actions require default trust.
+    if (!invocation.satisfiesTrust(ActionTrust_Enum.DEFAULT)) {
       return null;
     }
-    const {node, method, args} = invocation;
-    const win = (node.ownerDocument || node).defaultView;
+    const {args, method, node} = invocation;
+    const win = getWin(node);
     switch (method) {
       case 'pushState':
       case 'setState':
         const element =
-          node.nodeType === Node.DOCUMENT_NODE ? node.documentElement : node;
-        return Services.bindForDocOrNull(element).then(bind => {
+          node.nodeType === Node.DOCUMENT_NODE
+            ? /** @type {!Document} */ (node).documentElement
+            : dev().assertElement(node);
+        return Services.bindForDocOrNull(element).then((bind) => {
           userAssert(bind, 'AMP-BIND is not installed.');
           return bind.invoke(invocation);
         });
@@ -174,7 +183,9 @@ export class StandardActions {
         return this.handleScrollTo_(invocation);
 
       case 'goBack':
-        Services.historyForDoc(this.ampdoc).goBack();
+        Services.historyForDoc(this.ampdoc).goBack(
+          /* navigate */ !!(args && args['navigate'] === true)
+        );
         return null;
 
       case 'print':
@@ -183,10 +194,13 @@ export class StandardActions {
 
       case 'optoutOfCid':
         return Services.cidForDoc(this.ampdoc)
-          .then(cid => cid.optOut())
-          .catch(reason => {
+          .then((cid) => cid.optOut())
+          .catch((reason) => {
             dev().error(TAG, 'Failed to opt out of CID', reason);
           });
+      case 'toggleTheme':
+        this.handleToggleTheme_();
+        return null;
     }
     throw user().createError('Unknown AMP action ', method);
   }
@@ -198,12 +212,13 @@ export class StandardActions {
    * @private Visible to tests only.
    */
   handleNavigateTo_(invocation) {
-    const {node, caller, method, args} = invocation;
-    const win = (node.ownerDocument || node).defaultView;
+    const {args, caller, method, node} = invocation;
+    const win = getWin(node);
     // Some components have additional constraints on allowing navigation.
     let permission = Promise.resolve();
-    if (startsWith(caller.tagName, 'AMP-')) {
-      permission = caller.getImpl().then(impl => {
+    if (caller.tagName.startsWith('AMP-')) {
+      const ampElement = /** @type {!AmpElement} */ (caller);
+      permission = ampElement.getImpl().then((impl) => {
         if (typeof impl.throwIfCannotNavigate == 'function') {
           impl.throwIfCannotNavigate();
         }
@@ -218,10 +233,34 @@ export class StandardActions {
           {target: args['target'], opener: args['opener']}
         );
       },
-      /* onrejected */ e => {
-        user().error(TAG, e.message);
+      /* onrejected */ (e) => {
+        user().error(TAG, e);
       }
     );
+  }
+
+  /**
+   * Handles the `toggleTheme` action.
+   *
+   * This action sets the `amp-dark-mode` class on the body element and stores the the preference for dark mode in localstorage.
+   */
+  handleToggleTheme_() {
+    this.ampdoc.waitForBodyOpen().then((body) => {
+      try {
+        const darkModeClass =
+          body.getAttribute('data-prefers-dark-mode-class') || 'amp-dark-mode';
+
+        if (this.prefersDarkMode_()) {
+          body.classList.remove(darkModeClass);
+          this.ampdoc.win.localStorage.setItem('amp-dark-mode', 'no');
+        } else {
+          body.classList.add(darkModeClass);
+          this.ampdoc.win.localStorage.setItem('amp-dark-mode', 'yes');
+        }
+      } catch (e) {
+        // LocalStorage may not be accessible.
+      }
+    });
   }
 
   /**
@@ -237,7 +276,7 @@ export class StandardActions {
    */
   handleCloseOrNavigateTo_(invocation) {
     const {node} = invocation;
-    const win = (node.ownerDocument || node).defaultView;
+    const win = getWin(node);
 
     // Don't allow closing if embedded in iframe or does not have an opener or
     // embedded in a multi-doc shadowDOM case.
@@ -319,13 +358,19 @@ export class StandardActions {
   handleHide_(invocation) {
     const target = dev().assertElement(invocation.node);
 
-    this.resources_.mutateElement(target, () => {
-      if (target.classList.contains('i-amphtml-element')) {
-        target./*OK*/ collapse();
-      } else {
-        toggle(target, false);
-      }
-    });
+    if (target.classList.contains('i-amphtml-element')) {
+      const ampElement = /** @type {!AmpElement} */ (target);
+      this.mutator_.mutateElement(
+        ampElement,
+        () => ampElement./*OK*/ collapse(),
+        // It is safe to skip measuring, because `mutator-impl.collapseElement`
+        // will set the size of the element as well as trigger a remeasure of
+        // everything below the collapsed element.
+        /* skipRemeasure */ true
+      );
+    } else {
+      this.mutator_.mutateElement(target, () => toggle(target, false));
+    }
 
     return null;
   }
@@ -337,11 +382,12 @@ export class StandardActions {
    * @return {?Promise}
    * @private Visible to tests only.
    */
-  handleShow_({node}) {
+  handleShow_(invocation) {
+    const {node} = invocation;
     const target = dev().assertElement(node);
-    const ownerWindow = toWin(target.ownerDocument.defaultView);
+    const ownerWindow = getWin(target);
 
-    if (target.classList.contains(getLayoutClass(Layout.NODISPLAY))) {
+    if (target.classList.contains(getLayoutClass(Layout_Enum.NODISPLAY))) {
       user().warn(
         TAG,
         'Elements with layout=nodisplay cannot be dynamically shown.',
@@ -350,7 +396,7 @@ export class StandardActions {
       return null;
     }
 
-    this.resources_.measureElement(() => {
+    this.mutator_.measureElement(() => {
       if (
         computedStyle(ownerWindow, target).display == 'none' &&
         !isShowable(target)
@@ -369,8 +415,9 @@ export class StandardActions {
     // iOS only honors focus in sync operations.
     if (autofocusElOrNull && Services.platformFor(ownerWindow).isIos()) {
       this.handleShowSync_(target, autofocusElOrNull);
+      this.mutator_.mutateElement(target, () => {}); // force a remeasure
     } else {
-      this.resources_.mutateElement(target, () => {
+      this.mutator_.mutateElement(target, () => {
         this.handleShowSync_(target, autofocusElOrNull);
       });
     }
@@ -385,7 +432,8 @@ export class StandardActions {
    */
   handleShowSync_(target, autofocusElOrNull) {
     if (target.classList.contains('i-amphtml-element')) {
-      target./*OK*/ expand();
+      const ampElement = /** @type {!AmpElement} */ (target);
+      ampElement./*OK*/ expand();
     } else {
       toggle(target, true);
     }
@@ -425,7 +473,7 @@ export class StandardActions {
       return null;
     }
 
-    this.resources_.mutateElement(target, () => {
+    this.mutator_.mutateElement(target, () => {
       if (args['force'] !== undefined) {
         // must be boolean, won't do type conversion
         const shouldForce = user().assertBoolean(
@@ -435,6 +483,36 @@ export class StandardActions {
         target.classList.toggle(className, shouldForce);
       } else {
         target.classList.toggle(className);
+      }
+    });
+
+    return null;
+  }
+
+  /**
+   * Handles "toggleChecked" action.
+   * @param {!./action-impl.ActionInvocation} invocation
+   * @return {?Promise}
+   * @private Visible to tests only.
+   */
+  handleToggleChecked_(invocation) {
+    const target = dev().assertElement(invocation.node);
+    const {args} = invocation;
+
+    this.mutator_.mutateElement(target, () => {
+      if (args['force'] !== undefined) {
+        // must be boolean, won't do type conversion
+        const shouldForce = user().assertBoolean(
+          args['force'],
+          "Optional argument 'force' must be a boolean."
+        );
+        target.checked = shouldForce;
+      } else {
+        if (target.checked === true) {
+          target.checked = false;
+        } else {
+          target.checked = true;
+        }
       }
     });
 

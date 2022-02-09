@@ -1,24 +1,11 @@
-/**
- * Copyright 2015 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Observable} from '#core/data-structures/observable';
+import {supportsPassiveEventListener} from '#core/dom/event-helper-listen';
+import {findIndex} from '#core/types/array';
+import {getWin, toWin} from '#core/window';
 
-import {Observable} from './observable';
+import {devAssert} from '#utils/log';
+
 import {Pass} from './pass';
-import {devAssert} from './log';
-import {findIndex} from './utils/array';
-import {toWin} from './types';
 
 const PROP_ = '__AMP_Gestures';
 
@@ -121,10 +108,7 @@ export class Gestures {
     this.wasEventing_ = false;
 
     /** @private {!Pass} */
-    this.pass_ = new Pass(
-      toWin(element.ownerDocument.defaultView),
-      this.doPass_.bind(this)
-    );
+    this.pass_ = new Pass(getWin(element), this.doPass_.bind(this));
 
     /** @private {!Observable} */
     this.pointerDownObservable_ = new Observable();
@@ -144,9 +128,19 @@ export class Gestures {
     /** @private @const {function(!Event)} */
     this.boundOnTouchCancel_ = this.onTouchCancel_.bind(this);
 
-    this.element_.addEventListener('touchstart', this.boundOnTouchStart_);
+    const win = element.ownerDocument.defaultView;
+    const passiveSupported = supportsPassiveEventListener(toWin(win));
+    this.element_.addEventListener(
+      'touchstart',
+      this.boundOnTouchStart_,
+      passiveSupported ? {passive: true} : false
+    );
     this.element_.addEventListener('touchend', this.boundOnTouchEnd_);
-    this.element_.addEventListener('touchmove', this.boundOnTouchMove_);
+    this.element_.addEventListener(
+      'touchmove',
+      this.boundOnTouchMove_,
+      passiveSupported ? {passive: true} : false
+    );
     this.element_.addEventListener('touchcancel', this.boundOnTouchCancel_);
 
     /** @private {boolean} */
@@ -170,8 +164,8 @@ export class Gestures {
    * gesture handler registered in this method the recognizer is installed
    * and from that point on it participates in the event processing.
    *
-   * @param {function(new:GestureRecognizer<DATA>, !Gestures)} recognizerConstr
-   * @param {function(!Gesture<DATA>)} handler
+   * @param {function(new:GestureRecognizer, !Gestures)} recognizerConstr
+   * @param {function(!Gesture)} handler
    * @return {!UnlistenDef}
    * @template DATA
    */
@@ -192,7 +186,7 @@ export class Gestures {
    * true if anything was done. Returns false if there were no handlers
    * registered on the given gesture recognizer in first place.
    *
-   * @param {function(new:GestureRecognizer<DATA>, !Gestures)} recognizerConstr
+   * @param {function(new:GestureRecognizer, !Gestures)} recognizerConstr
    * @return {boolean}
    */
   removeGesture(recognizerConstr) {
@@ -200,7 +194,7 @@ export class Gestures {
     const overserver = this.overservers_[type];
     if (overserver) {
       overserver.removeAll();
-      const index = findIndex(this.recognizers_, e => e.getType() == type);
+      const index = findIndex(this.recognizers_, (e) => e.getType() == type);
       if (index < 0) {
         return false;
       }

@@ -1,27 +1,14 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {createElementWithAttributes} from '#core/dom';
+
+import {Services} from '#service';
+
 import {Action} from '../analytics';
 import {Dialog} from '../dialog';
 import {Entitlement} from '../entitlement';
 import {LocalSubscriptionPlatformRenderer} from '../local-subscription-platform-renderer';
 import {ServiceAdapter} from '../service-adapter';
-import {Services} from '../../../../src/services';
-import {createElementWithAttributes} from '../../../../src/dom';
 
-describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
+describes.realWin('local-subscriptions-rendering', {amp: true}, (env) => {
   let win, doc, ampdoc;
   let renderer;
   let dialog, serviceAdapter;
@@ -38,9 +25,9 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
       dialog,
       serviceAdapter
     );
-    const serviceIds = ['service1', 'service2'];
+    const platformKeys = ['platformKey1', 'platformKey2'];
     entitlementsForService1 = new Entitlement({
-      service: serviceIds[0],
+      service: platformKeys[0],
       granted: false,
       grantReason: null,
     });
@@ -51,8 +38,8 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
       'should call renderActions_ and renderDialog with ' +
         'the entitlements provided',
       () => {
-        const actionRenderStub = sandbox.stub(renderer, 'renderActions_');
-        const dialogRenderStub = sandbox.stub(renderer, 'renderDialog_');
+        const actionRenderStub = env.sandbox.stub(renderer, 'renderActions_');
+        const dialogRenderStub = env.sandbox.stub(renderer, 'renderDialog_');
         renderer.render(entitlementsForService1);
         expect(actionRenderStub).to.be.calledWith(entitlementsForService1);
         expect(dialogRenderStub).to.be.calledWith(entitlementsForService1);
@@ -79,13 +66,16 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
         'subscriptions-decorate': '',
       });
       elements = [actions1, actions2];
-      elements.forEach(element => {
+      elements.forEach((element) => {
         doc.body.appendChild(element);
       });
     });
 
     beforeEach(() => {
-      delegateUIStub = sandbox.stub(serviceAdapter, 'decorateServiceAction');
+      delegateUIStub = env.sandbox.stub(
+        serviceAdapter,
+        'decorateServiceAction'
+      );
     });
 
     function isDisplayed(el) {
@@ -93,7 +83,7 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
     }
 
     function displayed(array) {
-      elements.forEach(element => {
+      elements.forEach((element) => {
         const shouldBeDisplayed = array.includes(element);
         expect(isDisplayed(element)).to.equal(
           shouldBeDisplayed,
@@ -105,29 +95,23 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
       });
     }
 
-    it('should display actions and action-sections', () => {
-      return renderer.render({loggedIn: true}).then(() => {
-        displayed([actions1]);
-      });
+    it('should display actions and action-sections', async () => {
+      await renderer.render({loggedIn: true});
+      displayed([actions1]);
     });
 
-    it('should display actions and action-sections', () => {
-      return renderer.render({subscribed: true}).then(() => {
-        displayed([actions2]);
-        expect(delegateUIStub).to.be.called;
-      });
+    it('should display actions and action-sections', async () => {
+      await renderer.render({subscribed: true});
+      displayed([actions2]);
+      expect(delegateUIStub).to.be.called;
     });
 
-    it('should hide sections on reset', () => {
-      return renderer
-        .render({subscribed: true})
-        .then(() => {
-          displayed([actions2]);
-          return renderer.reset();
-        })
-        .then(() => {
-          displayed([]);
-        });
+    it('should hide sections on reset', async () => {
+      await renderer.render({subscribed: true});
+      displayed([actions2]);
+
+      await renderer.reset();
+      displayed([]);
     });
   });
 
@@ -137,8 +121,8 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
     let dialog0, dialog1, dialog2, dialog3;
 
     beforeEach(() => {
-      templatesMock = sandbox.mock(Services.templatesFor(win));
-      dialogMock = sandbox.mock(renderer.dialog_);
+      templatesMock = env.sandbox.mock(Services.templatesForDoc(ampdoc));
+      dialogMock = env.sandbox.mock(renderer.dialog_);
       dialog0 = createElementWithAttributes(doc, 'div', {
         'id': 'dialog0',
         'subscriptions-dialog': '',
@@ -171,29 +155,29 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
       dialogMock.verify();
     });
 
-    it('should render an element', () => {
+    it('should render an element', async () => {
       templatesMock.expects('renderTemplate').never();
       let content;
       dialogMock
         .expects('open')
         .withExactArgs(
-          sinon.match(arg => {
+          env.sandbox.match((arg) => {
             content = arg;
             return true;
           }),
           true
         )
         .once();
-      return renderer.renderDialog_({value: 'A'}).then(() => {
-        expect(content.id).to.equal('dialog1');
-        expect(content.textContent).to.equal('dialog1');
-        expect(content).to.not.equal(dialog1);
-        expect(content).to.not.have.attribute('subscriptions-dialog');
-        expect(content).to.not.have.attribute('subscriptions-display');
-      });
+
+      await renderer.renderDialog_({value: 'A'});
+      expect(content.id).to.equal('dialog1');
+      expect(content.textContent).to.equal('dialog1');
+      expect(content).to.not.equal(dialog1);
+      expect(content).to.not.have.attribute('subscriptions-dialog');
+      expect(content).to.not.have.attribute('subscriptions-display');
     });
 
-    it('should render a template', () => {
+    it('should render a template', async () => {
       const rendered = createElementWithAttributes(doc, 'div', {});
       const data = {value: 'B'};
       templatesMock
@@ -205,27 +189,27 @@ describes.realWin('local-subscriptions-rendering', {amp: true}, env => {
       dialogMock
         .expects('open')
         .withExactArgs(
-          sinon.match(arg => {
+          env.sandbox.match((arg) => {
             content = arg;
             return true;
           }),
           true
         )
         .once();
-      return renderer.renderDialog_(data).then(() => {
-        expect(content).to.equal(rendered);
-      });
+
+      await renderer.renderDialog_(data);
+      expect(content).to.equal(rendered);
     });
 
-    it('should ignore rendering if nothing found', () => {
+    it('should ignore rendering if nothing found', async () => {
       templatesMock.expects('renderTemplate').never();
       dialogMock.expects('open').never();
-      return renderer.render({value: 'C'});
+      await renderer.render({value: 'C'});
     });
 
-    it('should hide the dialog on reset', () => {
+    it('should hide the dialog on reset', async () => {
       dialogMock.expects('close').once();
-      return renderer.reset();
+      await renderer.reset();
     });
   });
 });

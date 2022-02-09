@@ -1,27 +1,13 @@
-/**
- * Copyright 2019 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Services} from '#service';
+import {AmpDocService} from '#service/ampdoc-impl';
 
-import {AmpDocService} from '../../../../src/service/ampdoc-impl';
-import {AmpList} from '../amp-list';
-import {Services} from '../../../../src/services';
 import {
   measureElementStub,
   measureMutateElementStub,
   mutateElementStub,
-} from '../../../../testing/test-helper';
+} from '#testing/helpers/service';
+
+import {AmpList} from '../amp-list';
 
 describes.realWin(
   'amp-list layout container',
@@ -31,37 +17,36 @@ describes.realWin(
       extensions: ['amp-list'],
     },
   },
-  env => {
+  (env) => {
     let win;
     let doc;
     let ampdoc;
-    let sandbox;
     let element, list;
     let templates;
+    let lockHeightSpy, unlockHeightSpy;
 
     beforeEach(() => {
       win = env.win;
       doc = win.document;
       ampdoc = env.ampdoc;
-      sandbox = env.sandbox;
 
       templates = {
-        findAndSetHtmlForTemplate: sandbox.stub(),
-        findAndRenderTemplate: sandbox.stub(),
-        findAndRenderTemplateArray: sandbox.stub(),
+        findAndSetHtmlForTemplate: env.sandbox.stub(),
+        findAndRenderTemplate: env.sandbox.stub(),
+        findAndRenderTemplateArray: env.sandbox.stub(),
       };
-      sandbox.stub(Services, 'templatesFor').returns(templates);
-      sandbox.stub(AmpDocService.prototype, 'getAmpDoc').returns(ampdoc);
+      env.sandbox.stub(Services, 'templatesForDoc').returns(templates);
+      env.sandbox.stub(AmpDocService.prototype, 'getAmpDoc').returns(ampdoc);
 
       element = doc.createElement('amp-list');
       list = new AmpList(element);
 
-      sandbox.stub(list, 'getAmpDoc').returns(ampdoc);
-      sandbox.stub(list, 'getFallback').returns(null);
+      env.sandbox.stub(list, 'getAmpDoc').returns(ampdoc);
+      env.sandbox.stub(list, 'getFallback').returns(null);
 
-      sandbox.stub(list, 'mutateElement').callsFake(mutateElementStub);
-      sandbox.stub(list, 'measureElement').callsFake(measureElementStub);
-      sandbox
+      env.sandbox.stub(list, 'mutateElement').callsFake(mutateElementStub);
+      env.sandbox.stub(list, 'measureElement').callsFake(measureElementStub);
+      env.sandbox
         .stub(list, 'measureMutateElement')
         .callsFake(measureMutateElementStub);
       element.setAttribute('src', '/list');
@@ -70,10 +55,18 @@ describes.realWin(
       element.setAttribute('height', '10');
       doc.body.appendChild(element);
 
-      sandbox.stub(list, 'getOverflowElement').returns(null);
-      sandbox.stub(list, 'fetchList_').returns(Promise.resolve());
-      list.element.changeSize = () => {};
+      env.sandbox.stub(list, 'getOverflowElement').returns(null);
+      env.sandbox.stub(list, 'fetchList_').returns(Promise.resolve());
+      list.element.applySize = () => {};
       list.buildCallback();
+
+      lockHeightSpy = env.sandbox.spy(list, 'lockHeightAndMutate_');
+      unlockHeightSpy = env.sandbox.spy(list, 'unlockHeightInsideMutate_');
+    });
+
+    afterEach(() => {
+      expect(lockHeightSpy).not.called;
+      expect(unlockHeightSpy).not.called;
     });
 
     it('should change to layout container', async () => {
@@ -90,7 +83,7 @@ describes.realWin(
     });
 
     it('should trigger on bind', async () => {
-      const changeSpy = sandbox.spy(list, 'changeToLayoutContainer_');
+      const changeSpy = env.sandbox.spy(list, 'changeToLayoutContainer_');
       await list.layoutCallback();
       await list.mutatedAttributesCallback({'is-layout-container': true});
       expect(changeSpy).to.be.calledOnce;

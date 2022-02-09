@@ -1,28 +1,14 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {COOKIELESS_API_SERVER} from '../constants';
-import {Services} from '../../../../src/services';
-import {addParamsToUrl, parseUrlDeprecated} from '../../../../src/url';
-import {createElementWithAttributes} from '../../../../src/dom';
-import {dict} from '../../../../src/utils/object';
-import {getData} from '../../../../src/event-helper';
-import {isObject} from '../../../../src/types';
-import {parseJson} from '../../../../src/json';
+import {createElementWithAttributes} from '#core/dom';
+import {setStyles, toggle} from '#core/dom/style';
+import {isObject} from '#core/types';
+import {parseJson} from '#core/types/object/json';
 
-import {setStyles, toggle} from '../../../../src/style';
+import {Services} from '#service';
+
+import {getData} from '#utils/event-helper';
+
+import {addParamsToUrl, parseUrlDeprecated} from '../../../../src/url';
+import {COOKIELESS_API_SERVER} from '../constants';
 
 const RE_IFRAME = /#iframe$/;
 const pixelatorFrameTitle = 'Pxltr Frame';
@@ -36,25 +22,27 @@ const pixelatorFrameTitle = 'Pxltr Frame';
  * }>} pixelList
  * @return {Array}
  */
-const groupPixelsByTime = pixelList => {
+const groupPixelsByTime = (pixelList) => {
   // Clean delay value; if it's empty/doesn't exist, default to [0]
-  const cleanedPixels = pixelList.map(pixel => {
+  const cleanedPixels = pixelList.map((pixel) => {
     const {delay} = pixel;
-    return Object.assign({}, pixel, {
+    return {
+      ...pixel,
       delay: Array.isArray(delay) && delay.length ? delay : [0],
-    });
+    };
   });
 
   const delayMap = cleanedPixels
-    .map(pixel => {
+    .map((pixel) => {
       const delays = pixel.delay;
-      return delays.map(delay => ({
+      return delays.map((delay) => ({
         delay,
         pixels: [pixel],
       }));
     })
     .reduce((a, b) => a.concat(b), []) // flatten
-    .reduce((currentDelayMap, {delay, pixels}) => {
+    .reduce((currentDelayMap, curDelay) => {
+      const {delay, pixels} = curDelay;
       if (!currentDelayMap[delay]) {
         currentDelayMap[delay] = [];
       }
@@ -62,7 +50,7 @@ const groupPixelsByTime = pixelList => {
       return currentDelayMap;
     }, {});
 
-  return Object.keys(delayMap).map(delay => ({
+  return Object.keys(delayMap).map((delay) => ({
     delay: Number(delay),
     pixels: delayMap[delay],
   }));
@@ -70,37 +58,30 @@ const groupPixelsByTime = pixelList => {
 
 export const pixelDrop = (url, ampDoc) => {
   const doc = ampDoc.win.document;
-  const ampPixel = createElementWithAttributes(
-    doc,
-    'amp-pixel',
-    dict({
-      'layout': 'nodisplay',
-      'referrerpolicy': 'no-referrer',
-      'src': url,
-    })
-  );
+  const ampPixel = createElementWithAttributes(doc, 'amp-pixel', {
+    'layout': 'nodisplay',
+    'referrerpolicy': 'no-referrer',
+    'src': url,
+  });
   doc.body.appendChild(ampPixel);
 };
 
-const getIframeName = url =>
+const getIframeName = (url) =>
   parseUrlDeprecated(url)
     .host.split('.')
     .concat(pixelatorFrameTitle.toLowerCase().replace(/\s/, '_'));
 
-const iframeDrop = (url, ampDoc, {name, title}) => {
+const iframeDrop = (url, ampDoc, data) => {
+  const {name, title} = data;
   const doc = ampDoc.win.document;
-  const iframe = createElementWithAttributes(
-    doc,
-    'iframe',
-    dict({
-      'frameborder': 0,
-      'width': 0,
-      'height': 0,
-      'name': name,
-      'title': title,
-      'src': url,
-    })
-  );
+  const iframe = createElementWithAttributes(doc, 'iframe', {
+    'frameborder': 0,
+    'width': 0,
+    'height': 0,
+    'name': name,
+    'title': title,
+    'src': url,
+  });
   toggle(iframe, false);
   setStyles(iframe, {
     position: 'absolute',
@@ -127,29 +108,24 @@ const dropPixelatorPixel = (url, ampDoc) => {
 
 /**
  * Requests groups of pixels at specified delays
- * @param  {Array<{
- * delay: number,
- * id: string,
- * url: string
- * }>} pixels
- * @param  {{
- * sid: string,
- * ampDoc: *
- * }} options
+ * @param  {Array<{delay: number, id: string,url: string}>} pixels
+ * @param  {{sid: string, ampDoc: *}} options
  */
-const dropPixelGroups = (pixels, {sid, ampDoc}) => {
+const dropPixelGroups = (pixels, options) => {
+  const {ampDoc, sid} = options;
   const pixelGroups = groupPixelsByTime(pixels);
-  pixelGroups.forEach(({delay, pixels}) => {
+  pixelGroups.forEach((pixelGroup) => {
+    const {delay, pixels} = pixelGroup;
     setTimeout(() => {
-      const pids = pixels.map(pixel => {
+      const pids = pixels.map((pixel) => {
         dropPixelatorPixel(pixel.url, ampDoc);
         return pixel.id;
       });
-      const data = dict({
+      const data = {
         'delay': `${delay}`,
         'ids': pids.join('-'),
         'sid': sid,
-      });
+      };
       const url = addParamsToUrl(`${COOKIELESS_API_SERVER}/live/prender`, data);
 
       if (ampDoc.win.navigator.sendBeacon) {
@@ -167,7 +143,7 @@ const dropPixelGroups = (pixels, {sid, ampDoc}) => {
  * @return {!JsonObject}
  */
 function getJsonObject_(object) {
-  const params = dict();
+  const params = {};
 
   if (object === undefined || object === null) {
     return params;
@@ -186,7 +162,7 @@ function getJsonObject_(object) {
   return params;
 }
 
-export const callPixelEndpoint = event => {
+export const callPixelEndpoint = (event) => {
   const {ampDoc, endpoint} = event;
   const eventData = getJsonObject_(getData(event));
   const url = addParamsToUrl(endpoint, eventData);
@@ -200,9 +176,9 @@ export const callPixelEndpoint = event => {
       ampCors: false,
       credentials: 'include',
     })
-    .then(res => res.json())
+    .then((res) => res.json())
     .then(
-      json => {
+      (json) => {
         const {pixels = []} = json;
         if (pixels.length > 0) {
           dropPixelGroups(pixels, {

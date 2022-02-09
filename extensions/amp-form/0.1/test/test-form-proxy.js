@@ -1,24 +1,10 @@
-/**
- * Copyright 2016 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import {Services} from '../../../../src/services';
+import {Services} from '#service';
+
+import {parseUrlDeprecated} from '../../../../src/url';
 import {
   installFormProxy,
-  setBlacklistedPropertiesForTesting,
+  setDenylistedPropertiesForTesting,
 } from '../form-proxy';
-import {parseUrlDeprecated} from '../../../../src/url';
 
 const PROPS = [
   'id',
@@ -39,31 +25,22 @@ describes.repeated(
   {
     'modern w/o inputs': {},
     'modern w/inputs': {inputs: true},
-    'legacy w/o inputs': {blacklist: true},
-    'legacy w/ inputs': {blacklist: true, inputs: true},
+    'legacy w/o inputs': {denylist: true},
+    'legacy w/ inputs': {denylist: true, inputs: true},
     'no EventTarget': {eventTarget: true},
   },
-  (name, variant) => {
+  (name, variant, env) => {
     let form;
     let inputs;
-    let sandbox;
 
-    before(() => {
-      sandbox = sinon.sandbox;
-
+    beforeEach(() => {
       // Stub only to work around the fact that there's no Ampdoc, so the service
       // cannot be retrieved.
       // Otherwise this test would barf because `form` is detached.
-      sandbox.stub(Services, 'urlForDoc').returns({
+      env.sandbox.stub(Services, 'urlForDoc').returns({
         parse: parseUrlDeprecated,
       });
-    });
 
-    after(() => {
-      sandbox.restore();
-    });
-
-    beforeEach(() => {
       form = document.createElement('form');
       form.id = 'form1';
       form.action = 'https://example.org/submit';
@@ -73,11 +50,11 @@ describes.repeated(
       // Inputs.
       if (variant.inputs) {
         const inputNames = PROPS.slice(0);
-        // Also, add some methods, which are never blacklisted.
+        // Also, add some methods, which are never denylisted.
         inputNames.push('getAttribute');
         inputNames.push('submit');
         inputs = {};
-        inputNames.forEach(name => {
+        inputNames.forEach((name) => {
           const input = document.createElement('input');
           input.id = name;
           form.appendChild(input);
@@ -85,9 +62,9 @@ describes.repeated(
         });
       }
 
-      // Test blacklist.
-      if (variant.blacklist) {
-        setBlacklistedPropertiesForTesting(PROPS);
+      // Test denylist.
+      if (variant.denylist) {
+        setDenylistedPropertiesForTesting(PROPS);
       }
 
       const eventTarget = window.EventTarget;
@@ -105,7 +82,7 @@ describes.repeated(
 
     afterEach(() => {
       delete window.FormProxy;
-      setBlacklistedPropertiesForTesting(null);
+      setDenylistedPropertiesForTesting(null);
     });
 
     it('should initialize correctly', () => {

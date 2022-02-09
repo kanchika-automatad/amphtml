@@ -1,32 +1,21 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {addAttributesToElement} from '#core/dom';
 
+import {Services} from '#service';
+import {LocalizationService} from '#service/localization';
+
+import * as analyticsApi from '#utils/analytics';
+
+import {registerServiceBuilder} from '../../../../src/service-helpers';
+import {AmpStoryEmbeddedComponent} from '../amp-story-embedded-component';
 import {
   Action,
-  AmpStoryStoreService,
   EmbeddedComponentState,
+  getStoreService,
 } from '../amp-story-store-service';
-import {AmpStoryEmbeddedComponent} from '../amp-story-embedded-component';
 import {EventType} from '../events';
-import {LocalizationService} from '../../../../src/service/localization';
-import {Services} from '../../../../src/services';
-import {addAttributesToElement} from '../../../../src/dom';
-import {registerServiceBuilder} from '../../../../src/service';
+import {StoryAnalyticsEvent} from '../story-analytics';
 
-describes.realWin('amp-story-embedded-component', {amp: true}, env => {
+describes.realWin('amp-story-embedded-component', {amp: true}, (env) => {
   let component;
   let win;
   let parentEl;
@@ -35,29 +24,26 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
   let clickableEl;
   let fakeCover;
   let fakeComponent;
+  let analyticsTriggerStub;
 
   beforeEach(() => {
     win = env.win;
-    storeService = new AmpStoryStoreService(win);
-    registerServiceBuilder(win, 'story-store', () => storeService);
-    clickableEl = win.document.createElement('a');
-    addAttributesToElement(clickableEl, {'href': 'https://google.com'});
 
-    // Making sure resource tasks run synchronously.
-    sandbox.stub(Services, 'resourcesForDoc').returns({
+    const localizationService = new LocalizationService(win.document.body);
+    env.sandbox
+      .stub(Services, 'localizationForDoc')
+      .returns(localizationService);
+
+    // Making sure mutator tasks run synchronously.
+    env.sandbox.stub(Services, 'mutatorForDoc').returns({
       mutateElement: (element, callback) => {
         callback();
         return Promise.resolve();
       },
       measureMutateElement: (measure, mutate) => {
-        return Promise.resolve()
-          .then(measure)
-          .then(mutate);
+        return Promise.resolve().then(measure).then(mutate);
       },
     });
-
-    const localizationService = new LocalizationService(win);
-    registerServiceBuilder(win, 'localization', () => localizationService);
 
     parentEl = win.document.createElement('div');
     win.document.body.appendChild(parentEl);
@@ -69,6 +55,9 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
     parentEl.appendChild(fakeCover);
     parentEl.appendChild(fakePage);
 
+    clickableEl = win.document.createElement('a');
+    addAttributesToElement(clickableEl, {'href': 'https://google.com'});
+
     component = new AmpStoryEmbeddedComponent(win, parentEl);
     fakeComponent = {
       element: clickableEl,
@@ -76,6 +65,15 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
       clientX: 50,
       clientY: 50,
     };
+
+    analyticsTriggerStub = env.sandbox.stub(
+      analyticsApi,
+      'triggerAnalyticsEvent'
+    );
+    storeService = getStoreService(win);
+    registerServiceBuilder(win, 'story-store', function () {
+      return storeService;
+    });
   });
 
   it('should build the tooltip', () => {
@@ -130,7 +128,7 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
     fakePage.appendChild(clickableEl);
     storeService.dispatch(Action.TOGGLE_INTERACTIVE_COMPONENT, fakeComponent);
 
-    const nextPageSpy = sandbox.spy();
+    const nextPageSpy = env.sandbox.spy();
     parentEl.addEventListener(EventType.NEXT_PAGE, nextPageSpy);
 
     const rightButton = component.focusedStateOverlay_.querySelector(
@@ -151,7 +149,7 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
       storeService.dispatch(Action.TOGGLE_RTL, true);
       storeService.dispatch(Action.TOGGLE_INTERACTIVE_COMPONENT, fakeComponent);
 
-      const previousPageSpy = sandbox.spy();
+      const previousPageSpy = env.sandbox.spy();
       parentEl.addEventListener(EventType.PREVIOUS_PAGE, previousPageSpy);
 
       const rightButton = component.focusedStateOverlay_.querySelector(
@@ -225,6 +223,88 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
     await timeout(150);
     expect(tooltipTextEl.textContent).to.equal('google.com');
   });
+
+  it('should fire analytics event when entering a tooltip', () => {
+    fakePage.appendChild(clickableEl);
+    storeService.dispatch(Action.TOGGLE_INTERACTIVE_COMPONENT, {
+      element: clickableEl,
+      state: EmbeddedComponentState.FOCUSED,
+    });
+
+    expect(analyticsTriggerStub).to.be.calledWith(
+      parentEl,
+      StoryAnalyticsEvent.FOCUS
+    );
+  });
+
+  it('should send data-var specified by publisher in analytics event', () => {
+    addAttributesToElement(clickableEl, {
+      'data-vars-tooltip-id': '1234',
+    });
+    fakePage.appendChild(clickableEl);
+
+    storeService.dispatch(Action.TOGGLE_INTERACTIVE_COMPONENT, {
+      element: clickableEl,
+      state: EmbeddedComponentState.FOCUSED,
+    });
+
+    expect(analyticsTriggerStub).to.be.calledWithMatch(
+      parentEl,
+      StoryAnalyticsEvent.FOCUS,
+      {
+        tooltipId: '1234',
+      }
+    );
+  });
+
+  it('should fire analytics event when clicking on the tooltip of a link', () => {
+    fakePage.appendChild(clickableEl);
+    storeService.dispatch(Action.TOGGLE_INTERACTIVE_COMPONENT, {
+      element: clickableEl,
+      state: EmbeddedComponentState.FOCUSED,
+    });
+
+    const tooltip = component
+      .getShadowRootForTesting()
+      .querySelector('a.i-amphtml-story-tooltip');
+    tooltip.onclick = (e) => {
+      e.preventDefault(); // Make the test not actually navigate.
+    };
+
+    tooltip.click();
+
+    expect(analyticsTriggerStub).to.be.calledWith(
+      parentEl,
+      StoryAnalyticsEvent.CLICK_THROUGH
+    );
+  });
+
+  it('should fire analytics event when clicking on the tooltip of a tweet', () => {
+    clickableEl = win.document.createElement('amp-twitter');
+    addAttributesToElement(clickableEl, {
+      'data-tweetid': '1166723359696130049',
+    });
+    fakePage.appendChild(clickableEl);
+
+    storeService.dispatch(Action.TOGGLE_INTERACTIVE_COMPONENT, {
+      element: clickableEl,
+      state: EmbeddedComponentState.FOCUSED,
+    });
+
+    const tooltip = component
+      .getShadowRootForTesting()
+      .querySelector('a.i-amphtml-story-tooltip');
+    tooltip.onclick = (e) => {
+      e.preventDefault(); // Make the test not actually navigate.
+    };
+
+    tooltip.click();
+
+    expect(analyticsTriggerStub).to.be.calledWith(
+      parentEl,
+      StoryAnalyticsEvent.FOCUS
+    );
+  });
 });
 
 /**
@@ -232,5 +312,5 @@ describes.realWin('amp-story-embedded-component', {amp: true}, env => {
  * @return {!Promise}
  */
 function timeout(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

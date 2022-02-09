@@ -1,22 +1,6 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {DocImpl} from '../doc-impl';
 
-describes.realWin('DocImpl', {amp: true}, env => {
+describes.realWin('DocImpl', {amp: true}, (env) => {
   let ampdoc;
   let configDoc;
 
@@ -37,8 +21,8 @@ describes.realWin('DocImpl', {amp: true}, env => {
   it('should resolve body correctly', () => {
     const body = {};
     let bodyAvailable = false;
-    const bodyStub = sandbox.stub(ampdoc, 'getBody').callsFake(() => body);
-    sandbox.stub(ampdoc, 'isBodyAvailable').callsFake(() => bodyAvailable);
+    const bodyStub = env.sandbox.stub(ampdoc, 'getBody').callsFake(() => body);
+    env.sandbox.stub(ampdoc, 'isBodyAvailable').callsFake(() => bodyAvailable);
 
     // Body not available yet.
     expect(configDoc.getBody()).to.be.null;
@@ -51,8 +35,8 @@ describes.realWin('DocImpl', {amp: true}, env => {
   });
 
   it('should delegate ready signals to ampdoc', () => {
-    const readyStub = sandbox.stub(ampdoc, 'isReady');
-    const whenReadyStub = sandbox.stub(ampdoc, 'whenReady');
+    const readyStub = env.sandbox.stub(ampdoc, 'isReady');
+    const whenReadyStub = env.sandbox.stub(ampdoc, 'whenReady');
 
     configDoc.isReady();
     expect(readyStub).to.be.calledOnce;

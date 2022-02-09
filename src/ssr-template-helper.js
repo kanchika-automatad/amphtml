@@ -1,23 +1,8 @@
-/**
- * Copyright 2018 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {isArray} from '#core/types';
 
-import {dict} from './utils/object';
-import {isArray} from './types';
+import {userAssert} from '#utils/log';
+
 import {toStructuredCloneable} from './utils/xhr-utils';
-import {userAssert} from './log';
 
 /**
  * @typedef {{
@@ -48,12 +33,12 @@ export class SsrTemplateHelper {
   }
 
   /**
-   * Whether the viewer can render templates. A doc-level opt in as
+   * Whether the viewer should render templates. A doc-level opt in as
    * trusted viewers must set this capability explicitly, as a security
    * measure for potential abuse of feature.
    * @return {boolean}
    */
-  isSupported() {
+  isEnabled() {
     const ampdoc = this.viewer_.getAmpDoc();
     if (ampdoc.isSingleDoc()) {
       const htmlElement = ampdoc.getRootNode().documentElement;
@@ -62,6 +47,22 @@ export class SsrTemplateHelper {
       }
     }
     return false;
+  }
+
+  /**
+   * Asserts that the viewer is from a trusted origin.
+   *
+   * @param {!Element} element
+   * @return {!Promise}
+   */
+  assertTrustedViewer(element) {
+    return this.viewer_.isTrustedViewer().then((trusted) => {
+      userAssert(
+        trusted,
+        'Refused to attempt SSR in untrusted viewer: ',
+        element
+      );
+    });
   }
 
   /**
@@ -80,15 +81,17 @@ export class SsrTemplateHelper {
     if (!opt_templates) {
       mustacheTemplate = this.templates_.maybeFindTemplate(element);
     }
-    return this.viewer_.sendMessageAwaitResponse(
-      'viewerRenderTemplate',
-      this.buildPayload_(
-        request,
-        mustacheTemplate,
-        opt_templates,
-        opt_attributes
-      )
-    );
+    return this.assertTrustedViewer(element).then(() => {
+      return this.viewer_.sendMessageAwaitResponse(
+        'viewerRenderTemplate',
+        this.buildPayload_(
+          request,
+          mustacheTemplate,
+          opt_templates,
+          opt_attributes
+        )
+      );
+    });
   }
 
   /**
@@ -96,19 +99,21 @@ export class SsrTemplateHelper {
    * If SSR is supported, data is assumed to be from ssr() above.
    * @param {!Element} element
    * @param {(?JsonObject|string|undefined|!Array)} data
-   * @return {!Promise}
+   * @return {!Promise<(!Element|!Array<!Element>)>}
    */
   applySsrOrCsrTemplate(element, data) {
     let renderTemplatePromise;
-    if (this.isSupported()) {
+    if (this.isEnabled()) {
       userAssert(
         typeof data['html'] === 'string',
-        'Server side html response must be defined'
+        'Skipping template rendering due to failed fetch'
       );
-      renderTemplatePromise = this.templates_.findAndSetHtmlForTemplate(
-        element,
-        /** @type {string} */ (data['html'])
-      );
+      renderTemplatePromise = this.assertTrustedViewer(element).then(() => {
+        return this.templates_.findAndSetHtmlForTemplate(
+          element,
+          /** @type {string} */ (data['html'])
+        );
+      });
     } else if (isArray(data)) {
       renderTemplatePromise = this.templates_.findAndRenderTemplateArray(
         element,
@@ -133,7 +138,7 @@ export class SsrTemplateHelper {
    * @private
    */
   buildPayload_(request, mustacheTemplate, opt_templates, opt_attributes = {}) {
-    const ampComponent = dict({'type': this.sourceComponent_});
+    const ampComponent = {'type': this.sourceComponent_};
 
     const successTemplateKey = 'successTemplate';
     const successTemplate =
@@ -163,13 +168,13 @@ export class SsrTemplateHelper {
       Object.assign(ampComponent, opt_attributes);
     }
 
-    const data = dict({
+    const data = {
       'originalRequest': toStructuredCloneable(
         request.xhrUrl,
         request.fetchOpt
       ),
       'ampComponent': ampComponent,
-    });
+    };
 
     return data;
   }

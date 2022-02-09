@@ -1,33 +1,12 @@
-/**
- * Copyright 2017 The AMP HTML Authors. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS-IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import {
   AsyncVerifier,
   DefaultVerifier,
   getFormVerifier,
 } from '../form-verifiers';
 
-describes.fakeWin('amp-form async verification', {}, env => {
-  let sandbox;
-  beforeEach(() => {
-    sandbox = env.sandbox;
-  });
-
+describes.fakeWin('amp-form async verification', {}, (env) => {
   function stubValidationMessage(input) {
-    sandbox.defineProperty(input, 'validationMessage', {
+    env.sandbox.defineProperty(input, 'validationMessage', {
       get() {
         return this.fakeValidationMessage_;
       },
@@ -37,7 +16,7 @@ describes.fakeWin('amp-form async verification', {}, env => {
     });
 
     const originalSetCustomValidity = input.setCustomValidity.bind(input);
-    sandbox.defineProperty(input, 'setCustomValidity', {
+    env.sandbox.defineProperty(input, 'setCustomValidity', {
       value(message) {
         this.validationMessage = message;
         originalSetCustomValidity(message);
@@ -116,7 +95,7 @@ describes.fakeWin('amp-form async verification', {}, env => {
 
   describe('AsyncVerifier', () => {
     it('should not submit when no element has a value', () => {
-      const xhrSpy = sandbox.spy(() => Promise.resolve());
+      const xhrSpy = env.sandbox.spy(() => Promise.resolve());
       const form = getForm(env.win.document);
       const verifier = getFormVerifier(form, xhrSpy);
       return verifier.onCommit().then(() => {
@@ -128,7 +107,7 @@ describes.fakeWin('amp-form async verification', {}, env => {
       'should submit when an element is filled out, mutated, ' +
         'and committed',
       () => {
-        const xhrSpy = sandbox.spy(() => Promise.resolve());
+        const xhrSpy = env.sandbox.spy(() => Promise.resolve());
         const form = getForm(env.win.document);
         const verifier = getFormVerifier(form, xhrSpy);
 
@@ -154,7 +133,7 @@ describes.fakeWin('amp-form async verification', {}, env => {
           });
         },
       };
-      const xhrSpy = sandbox.spy(() =>
+      const xhrSpy = env.sandbox.spy(() =>
         Promise.reject({
           response: errorResponse,
         })
@@ -187,7 +166,7 @@ describes.fakeWin('amp-form async verification', {}, env => {
             });
           },
         };
-        const xhrStub = sandbox.stub();
+        const xhrStub = env.sandbox.stub();
         xhrStub.onCall(0).returns(Promise.reject({response: errorResponse}));
         xhrStub.onCall(1).returns(Promise.resolve());
 
@@ -233,7 +212,7 @@ describes.fakeWin('amp-form async verification', {}, env => {
             });
           },
         };
-        const xhrSpy = sandbox.spy(() =>
+        const xhrSpy = env.sandbox.spy(() =>
           Promise.reject({
             response: errorResponse,
           })
